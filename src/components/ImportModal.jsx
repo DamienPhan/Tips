@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { parseImport } from '../lib/parseImport'
-import { computeOvertime, fmtMinutes } from '../lib/parseShift'
+import { recompute, fmtMinutes } from '../lib/parseShift'
 import { useMissions } from '../store/missions'
 
 const SERVICE_LABEL = { ARR: 'Arrivée', DEP: 'Départ', TRANSIT: 'Transit' }
@@ -31,7 +31,7 @@ export default function ImportModal({ onClose, onManual }) {
     } else if (result.type === 'shifts') {
       const items = result.items.map((s, i) => {
         const isOff = !!offFlags[i]
-        return { ...s, is_day_off: isOff, overtime_hours: computeOvertime(s.hours, isOff) }
+        return { ...s, ...recompute(s, isOff) }
       })
       await addShifts(items)
     }
