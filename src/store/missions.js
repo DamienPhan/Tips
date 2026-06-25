@@ -50,6 +50,11 @@ export const useMissions = create((set, get) => ({
     return saved.length
   },
 
+  updateShift: async (shift) => {
+    const record = await saveShift(shift)
+    set({ shifts: get().shifts.map(s => s.id === record.id ? record : s) })
+  },
+
   removeShift: async (id) => {
     await deleteShift(id)
     set({ shifts: get().shifts.filter(s => s.id !== id) })

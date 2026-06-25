@@ -64,6 +64,7 @@ create table if not exists work_shifts (
   end_min int not null,
   hours numeric(4,1) not null,
   overtime_hours numeric(4,1) default 0,
+  is_day_off boolean default false,
   created_at timestamptz default now()
 );
 
@@ -74,3 +75,6 @@ alter table work_shifts enable row level security;
 drop policy if exists owner_all_shifts on work_shifts;
 create policy owner_all_shifts on work_shifts
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Migration non destructive (si table déjà existante) :
+-- alter table work_shifts add column if not exists is_day_off boolean default false;

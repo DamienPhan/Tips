@@ -1,5 +1,4 @@
 export const BASE_SHIFT_MIN = 510   // 8h30
-export const WEEKLY_BASE_HOURS = 35
 
 function normDate(d, mo) {
   const year = new Date().getFullYear()
@@ -10,22 +9,30 @@ function toMinutes(h, m) {
   return (+h) * 60 + (m ? +m : 0)
 }
 
+// Calcule les heures sup d'un shift selon qu'il est OFF ou normal.
+export function computeOvertime(hours, isDayOff) {
+  if (isDayOff) return Math.round(hours * 10) / 10        // 100% en sup
+  return Math.max(0, Math.round((hours - BASE_SHIFT_MIN / 60) * 10) / 10)  // au-delà de 8h30
+}
+
 export function parseShifts(text) {
-  const re = /(\d{1,2})\/(\d{1,2})\s*:\s*(\d{1,2})h(\d{0,2})\s*-\s*(\d{1,2})h(\d{0,2})/gi
+  const re = /(\d{1,2})\/(\d{1,2})\s*:\s*(\d{1,2})h?(\d{0,2})\s*-\s*(\d{1,2})h?(\d{0,2})([^\n]*)/gi
   const out = []
   for (const m of text.matchAll(re)) {
-    const [, d, mo, h1, m1, h2, m2] = m
+    const [, d, mo, h1, m1, h2, m2, rest] = m
     const start = toMinutes(h1, m1)
     let end = toMinutes(h2, m2)
     if (end < start) end += 24 * 60
     const worked = end - start
-    const overtime = Math.max(0, worked - BASE_SHIFT_MIN)
+    const hours = Math.round(worked / 6) / 10
+    const isDayOff = /off/i.test(rest)
     out.push({
       shift_date: normDate(d, mo),
       start_min: start,
       end_min: end,
-      hours: Math.round(worked / 6) / 10,
-      overtime_hours: Math.round(overtime / 6) / 10
+      hours,
+      is_day_off: isDayOff,
+      overtime_hours: computeOvertime(hours, isDayOff)
     })
   }
   return out

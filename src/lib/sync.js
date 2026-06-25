@@ -68,7 +68,7 @@ export function initSync() {
   pullShifts()
 }
 
-const SHIFT_COLUMNS = ['id', 'shift_date', 'start_min', 'end_min', 'hours', 'overtime_hours', 'created_at']
+const SHIFT_COLUMNS = ['id', 'shift_date', 'start_min', 'end_min', 'hours', 'overtime_hours', 'is_day_off', 'created_at']
 
 function toShiftPayload(s) {
   const p = {}
