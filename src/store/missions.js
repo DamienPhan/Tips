@@ -1,24 +1,36 @@
 import { create } from 'zustand'
-import { saveMission, deleteMission, loadAll, pullFromServer } from '../lib/sync'
+import { todayLocal } from '../lib/date'
+import {
+  saveMission, deleteMission, loadAll, pullFromServer,
+  saveShift, deleteShift, loadShifts, pullShifts
+} from '../lib/sync'
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10)
+  return todayLocal()
 }
 
 export const useMissions = create((set, get) => ({
   missions: [],
+  shifts: [],
   loading: true,
 
   init: async () => {
-    const local = await loadAll()
-    set({ missions: local, loading: false })
+    set({ missions: await loadAll(), shifts: await loadShifts(), loading: false })
     await pullFromServer()
-    set({ missions: await loadAll() })
+    await pullShifts()
+    set({ missions: await loadAll(), shifts: await loadShifts() })
   },
 
   add: async (mission) => {
     const record = await saveMission({ ...mission, id: crypto.randomUUID() })
     set({ missions: [record, ...get().missions] })
+  },
+
+  addMany: async (missions) => {
+    const saved = []
+    for (const m of missions) saved.push(await saveMission({ ...m, id: crypto.randomUUID() }))
+    set({ missions: [...saved, ...get().missions] })
+    return saved.length
   },
 
   update: async (mission) => {
@@ -29,6 +41,18 @@ export const useMissions = create((set, get) => ({
   remove: async (id) => {
     await deleteMission(id)
     set({ missions: get().missions.filter(m => m.id !== id) })
+  },
+
+  addShifts: async (shifts) => {
+    const saved = []
+    for (const s of shifts) saved.push(await saveShift({ ...s, id: crypto.randomUUID() }))
+    set({ shifts: [...saved, ...get().shifts] })
+    return saved.length
+  },
+
+  removeShift: async (id) => {
+    await deleteShift(id)
+    set({ shifts: get().shifts.filter(s => s.id !== id) })
   },
 
   todayMissions: () => get().missions.filter(m => m.intervention_date === todayISO()),

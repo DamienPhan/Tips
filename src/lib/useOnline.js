@@ -1,0 +1,24 @@
+import { useEffect, useState } from 'react'
+import { db } from './db'
+
+export function useSyncStatus(missions) {
+  const [online, setOnline] = useState(navigator.onLine)
+  const [pending, setPending] = useState(0)
+
+  useEffect(() => {
+    const up = () => setOnline(true)
+    const down = () => setOnline(false)
+    window.addEventListener('online', up)
+    window.addEventListener('offline', down)
+    return () => {
+      window.removeEventListener('online', up)
+      window.removeEventListener('offline', down)
+    }
+  }, [])
+
+  useEffect(() => {
+    db.missions.where('syncStatus').equals('pending').count().then(setPending)
+  }, [missions])
+
+  return { online, pending }
+}

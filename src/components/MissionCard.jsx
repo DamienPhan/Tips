@@ -1,60 +1,70 @@
+import { useState } from 'react'
 import { useMissions } from '../store/missions'
 
 const SERVICE_LABEL = { ARR: 'Arrivée', DEP: 'Départ', TRANSIT: 'Transit' }
-const SYNC_DOT = { synced: 'bg-synced', pending: 'bg-pending', error: 'bg-error' }
 
 export default function MissionCard({ mission, onEdit }) {
-  const remove = useMissions(s => s.remove)
-  const tip = Number(mission.tip_amount || 0).toFixed(2).replace('.', ',')
+  const update = useMissions(s => s.update)
+  const [editingTip, setEditingTip] = useState(false)
+  const [tipDraft, setTipDraft] = useState('')
+
+  const tip = Number(mission.tip_amount || 0)
+  const tipFmt = tip.toFixed(2).replace('.', ',')
+
+  const openTip = () => {
+    setTipDraft(tip > 0 ? String(tip).replace('.', ',') : '')
+    setEditingTip(true)
+  }
+  const saveTip = async () => {
+    const v = Number(String(tipDraft).replace(',', '.')) || 0
+    await update({ ...mission, tip_amount: v })
+    setEditingTip(false)
+  }
 
   return (
-    <article className="bg-surface rounded-2xl p-4 mb-3 border border-white/5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+    <button
+      onClick={() => onEdit(mission)}
+      className="w-full text-left bg-surface rounded-2xl px-4 py-3.5 mb-2.5 active:bg-surface-2 transition-colors"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span
-              className={`w-1.5 h-1.5 rounded-full ${SYNC_DOT[mission.syncStatus] || 'bg-muted'}`}
-              title={mission.syncStatus}
-            />
-            <h3 className="font-medium truncate">
-              {mission.client_name || 'Client inconnu'}
-            </h3>
+            <h3 className="font-medium truncate">{mission.client_name || 'Client inconnu'}</h3>
+            {mission.is_no_show && (
+              <span className="text-error text-[0.6rem] uppercase tracking-wide bg-error/10 rounded px-1.5 py-0.5 shrink-0">No show</span>
+            )}
           </div>
-          <p className="text-muted text-sm mt-0.5 truncate">
+          <p className="text-muted text-[0.8rem] mt-1 truncate">
             {SERVICE_LABEL[mission.service_type] || '—'}
             {mission.flight_code ? ` · ${mission.flight_code}` : ''}
-            {mission.terminal ? ` · ${mission.terminal}` : ''}
+            {mission.terminal ? ` · T${mission.terminal}` : ''}
+            {` · ${mission.pax_count || 1} pax`}
           </p>
-          {mission.booking_ref && (
-            <p className="text-muted/70 text-xs mt-0.5">Réf. {mission.booking_ref}</p>
+        </div>
+
+        <div className="shrink-0" onClick={e => e.stopPropagation()}>
+          {editingTip ? (
+            <div className="flex items-center gap-1.5">
+              <input
+                inputMode="decimal" type="text" autoFocus value={tipDraft}
+                onChange={e => setTipDraft(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && saveTip()}
+                onBlur={saveTip}
+                placeholder="0,00"
+                className="w-20 bg-night rounded-lg px-2 py-1.5 text-right tnum font-display text-xl text-amber outline-none ring-2 ring-amber/40"
+              />
+            </div>
+          ) : (
+            <button onClick={openTip} className="block text-right active:opacity-60">
+              <span className="tnum font-display font-semibold text-amber text-[1.6rem] leading-none">
+                {tipFmt}
+              </span>
+              <span className="text-amber/50 text-sm"> €</span>
+              {tip === 0 && <p className="text-amber/40 text-[0.65rem] mt-0.5 text-right">ajouter</p>}
+            </button>
           )}
         </div>
-        <div className="text-right shrink-0">
-          <p className="tnum font-display font-bold text-amber text-2xl leading-none">{tip}<span className="text-amber/60 text-base"> €</span></p>
-          <p className="text-muted text-xs mt-1">{mission.pax_count || 1} pax</p>
-        </div>
       </div>
-
-      {mission.has_issue && (
-        <p className="text-error text-xs mt-3 bg-error/10 rounded-lg px-2.5 py-1.5">
-          ⚠ {mission.issue_description || 'Problème signalé'}
-        </p>
-      )}
-
-      <div className="flex gap-2 mt-3">
-        <button
-          onClick={() => onEdit(mission)}
-          className="flex-1 text-sm text-muted bg-surface-2 rounded-lg py-2 active:bg-white/10"
-        >
-          Modifier
-        </button>
-        <button
-          onClick={() => { if (confirm('Supprimer cette mission ?')) remove(mission.id) }}
-          className="px-4 text-sm text-error bg-error/10 rounded-lg py-2 active:bg-error/20"
-        >
-          Suppr.
-        </button>
-      </div>
-    </article>
+    </button>
   )
 }
