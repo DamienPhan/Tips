@@ -24,9 +24,27 @@ export function tipTrend(missions, granularity) {
     const key = granularity === 'week' ? isoWeekKey(m.intervention_date)
       : granularity === 'month' ? m.intervention_date.slice(0, 7)
       : m.intervention_date
-    map.set(key, (map.get(key) || 0) + Number(m.tip_amount || 0))
+    if (!map.has(key)) map.set(key, { tips: 0, count: 0 })
+    const b = map.get(key)
+    b.tips += Number(m.tip_amount || 0)
+    b.count += 1
   }
-  return [...map.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([key, value]) => ({ key, value }))
+  return [...map.entries()]
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([key, { tips, count }]) => ({ key, value: tips, count, avg: count > 0 ? tips / count : 0 }))
+}
+
+export function dailyAverage(missions) {
+  const byDay = new Map()
+  for (const m of missions) {
+    const k = m.intervention_date
+    if (!byDay.has(k)) byDay.set(k, 0)
+    byDay.set(k, byDay.get(k) + Number(m.tip_amount || 0))
+  }
+  const vals = [...byDay.values()]
+  if (vals.length === 0) return { avg: 0, max: 0, min: 0 }
+  const avg = vals.reduce((a, b) => a + b, 0) / vals.length
+  return { avg, max: Math.max(...vals), min: Math.min(...vals), days: vals.length }
 }
 
 export function serviceBreakdown(missions) {
