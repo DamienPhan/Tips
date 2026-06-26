@@ -39,7 +39,12 @@ export async function flush() {
   const pending = await db.missions.where('syncStatus').equals('pending').toArray()
   for (const m of pending) {
     const { error } = await supabase.from('missions').upsert(toPayload(m))
-    if (!error) await db.missions.update(m.id, { syncStatus: 'synced' })
+    if (error) {
+      console.error('Échec sync mission', m.booking_ref, error.message)
+      await db.missions.update(m.id, { syncStatus: 'error', syncError: error.message })
+    } else {
+      await db.missions.update(m.id, { syncStatus: 'synced', syncError: null })
+    }
   }
 }
 
@@ -50,7 +55,7 @@ export async function pullFromServer() {
   await db.transaction('rw', db.missions, async () => {
     for (const row of data) {
       const local = await db.missions.get(row.id)
-      if (local?.syncStatus === 'pending') continue // ne pas écraser un write local non synchronisé
+      if (local?.syncStatus === 'pending' || local?.syncStatus === 'error') continue // ne pas écraser un write local non synchronisé
       await db.missions.put({ ...row, syncStatus: 'synced' })
     }
   })
@@ -93,7 +98,12 @@ export async function flushShifts() {
   const pending = await db.shifts.where('syncStatus').equals('pending').toArray()
   for (const s of pending) {
     const { error } = await supabase.from('work_shifts').upsert(toShiftPayload(s))
-    if (!error) await db.shifts.update(s.id, { syncStatus: 'synced' })
+    if (error) {
+      console.error('Échec sync shift', s.shift_date, error.message)
+      await db.shifts.update(s.id, { syncStatus: 'error', syncError: error.message })
+    } else {
+      await db.shifts.update(s.id, { syncStatus: 'synced', syncError: null })
+    }
   }
 }
 
@@ -104,7 +114,7 @@ export async function pullShifts() {
   await db.transaction('rw', db.shifts, async () => {
     for (const row of data) {
       const local = await db.shifts.get(row.id)
-      if (local?.syncStatus === 'pending') continue
+      if (local?.syncStatus === 'pending' || local?.syncStatus === 'error') continue
       await db.shifts.put({ ...row, syncStatus: 'synced' })
     }
   })
