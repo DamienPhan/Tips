@@ -7,14 +7,13 @@ const DOW = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
 const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 
 function ymd(y, m, d) { return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}` }
+function eur(n, dec = 2) { return Number(n || 0).toFixed(dec).replace('.', ',') }
 
-// "6h45" / "6:45" / "0645" -> minutes ; renvoie null si invalide
 function parseTime(str) {
   const s = String(str).trim().replace(/\s/g, '')
   const m = s.match(/^(\d{1,2})(?:[h:](\d{0,2}))?$/i)
   if (!m) return null
-  const h = +m[1]
-  const min = m[2] ? +m[2] : 0
+  const h = +m[1]; const min = m[2] ? +m[2] : 0
   if (h > 23 || min > 59) return null
   return h * 60 + min
 }
@@ -36,7 +35,16 @@ export default function Calendar() {
   const [err, setErr] = useState('')
 
   const shiftMap = new Map(shifts.map(s => [s.shift_date, s]))
-  const missionDays = new Set(missions.map(m => m.intervention_date))
+  // tips par jour
+  const tipMap = new Map()
+  for (const m of missions) {
+    tipMap.set(m.intervention_date, (tipMap.get(m.intervention_date) || 0) + Number(m.tip_amount || 0))
+  }
+  const missionCountMap = new Map()
+  for (const m of missions) {
+    missionCountMap.set(m.intervention_date, (missionCountMap.get(m.intervention_date) || 0) + 1)
+  }
+  const maxTip = Math.max(...[...tipMap.values()], 1)
 
   const first = new Date(year, month, 1)
   const startOffset = (first.getDay() + 6) % 7
@@ -47,46 +55,33 @@ export default function Calendar() {
 
   const prevMonth = () => { if (month === 0) { setMonth(11); setYear(year - 1) } else setMonth(month - 1); closeDetail() }
   const nextMonth = () => { if (month === 11) { setMonth(0); setYear(year + 1) } else setMonth(month + 1); closeDetail() }
+  const goToday = () => { setYear(now.getFullYear()); setMonth(now.getMonth()); closeDetail() }
   const closeDetail = () => { setSelected(null); setEditing(false); setErr('') }
 
   const selDate = selected ? ymd(year, month, selected) : null
   const selShift = selDate ? shiftMap.get(selDate) : null
+  const selTips = selDate ? (tipMap.get(selDate) || 0) : 0
+  const selCount = selDate ? (missionCountMap.get(selDate) || 0) : 0
 
   const openEdit = () => {
     if (selShift) {
-      setStartStr(fmtMinutes(selShift.start_min))
-      setEndStr(fmtMinutes(selShift.end_min))
-      setEditOff(!!selShift.is_day_off)
-    } else {
-      setStartStr(''); setEndStr(''); setEditOff(false)
-    }
+      setStartStr(fmtMinutes(selShift.start_min)); setEndStr(fmtMinutes(selShift.end_min)); setEditOff(!!selShift.is_day_off)
+    } else { setStartStr(''); setEndStr(''); setEditOff(false) }
     setErr(''); setEditing(true)
   }
 
   const saveEdit = async () => {
-    const start = parseTime(startStr)
-    const end = parseTime(endStr)
+    const start = parseTime(startStr); const end = parseTime(endStr)
     if (start === null || end === null) { setErr('Format invalide. Ex : 7h ou 7h30'); return }
-    const base = { start_min: start, end_min: end }
-    const rec = recompute(base, editOff)
-    if (selShift) {
-      await updateShift({ ...selShift, start_min: start, end_min: end, ...rec })
-    } else {
-      await addShifts([{ shift_date: selDate, start_min: start, end_min: end, ...rec }])
-    }
+    const rec = recompute({ start_min: start, end_min: end }, editOff)
+    if (selShift) await updateShift({ ...selShift, start_min: start, end_min: end, ...rec })
+    else await addShifts([{ shift_date: selDate, start_min: start, end_min: end, ...rec }])
     setEditing(false)
   }
 
-  const toggleOff = async () => {
-    if (!selShift) return
-    await updateShift({ ...selShift, ...recompute(selShift, !selShift.is_day_off) })
-  }
+  const toggleOff = async () => { if (selShift) await updateShift({ ...selShift, ...recompute(selShift, !selShift.is_day_off) }) }
+  const del = async () => { if (selShift && confirm('Supprimer ce shift ?')) { await removeShift(selShift.id); closeDetail() } }
 
-  const del = async () => {
-    if (selShift && confirm('Supprimer ce shift ?')) { await removeShift(selShift.id); closeDetail() }
-  }
-
-  // Aperçu live pendant l'édition
   let preview = null
   if (editing) {
     const s = parseTime(startStr), e = parseTime(endStr)
@@ -97,37 +92,63 @@ export default function Calendar() {
   }
 
   return (
-    <div className="px-5 pt-3 pb-32">
-      <div className="flex items-center justify-between mb-5">
-        <button onClick={prevMonth} className="text-muted text-xl px-2 active:text-amber">‹</button>
-        <h2 className="font-medium">{MONTHS[month]} {year}</h2>
-        <button onClick={nextMonth} className="text-muted text-xl px-2 active:text-amber">›</button>
+    <div className="px-4 pt-3 pb-32">
+      {/* Navigation mois — grandes zones tactiles */}
+      <div className="flex items-stretch gap-2 mb-4">
+        <button onClick={prevMonth} aria-label="Mois précédent"
+          className="w-14 h-14 rounded-2xl bg-surface flex items-center justify-center text-2xl text-amber active:bg-surface-2">‹</button>
+        <button onClick={goToday}
+          className="flex-1 h-14 rounded-2xl bg-surface flex flex-col items-center justify-center active:bg-surface-2">
+          <span className="font-medium">{MONTHS[month]} {year}</span>
+          <span className="text-muted text-[0.65rem]">Appuyer pour aujourd'hui</span>
+        </button>
+        <button onClick={nextMonth} aria-label="Mois suivant"
+          className="w-14 h-14 rounded-2xl bg-surface flex items-center justify-center text-2xl text-amber active:bg-surface-2">›</button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 mb-2">
-        {DOW.map((d, i) => <div key={i} className="text-center text-muted text-xs py-1">{d}</div>)}
+      <div className="grid grid-cols-7 gap-1 mb-1.5">
+        {DOW.map((d, i) => <div key={i} className="text-center text-muted text-xs">{d}</div>)}
       </div>
       <div className="grid grid-cols-7 gap-1">
         {cells.map((d, i) => {
           if (d === null) return <div key={i} />
           const date = ymd(year, month, d)
           const shift = shiftMap.get(date)
-          const hasMission = missionDays.has(date)
+          const tips = tipMap.get(date) || 0
           const isSel = selected === d
           const isToday = date === ymd(now.getFullYear(), now.getMonth(), now.getDate())
+          // intensité fond selon tips
+          const intensity = tips > 0 ? 0.12 + (tips / maxTip) * 0.5 : 0
+          const bg = isSel ? '#E8B14C' : tips > 0 ? `rgba(232,177,76,${intensity})` : shift ? '#1F2633' : 'transparent'
+          const textColor = isSel ? '#0B0E14' : '#E6E9EF'
           return (
             <button key={i} onClick={() => { setSelected(isSel ? null : d); setEditing(false); setErr('') }}
-              className={`aspect-square rounded-lg flex flex-col items-center justify-center relative text-sm
-                ${isSel ? 'bg-amber text-night font-medium' : shift ? 'bg-surface-2 text-[#E6E9EF]' : 'text-muted'}
-                ${isToday && !isSel ? 'ring-1 ring-amber/40' : ''}`}>
-              {d}
-              <div className="flex gap-0.5 absolute bottom-1">
-                {shift && <span className={`w-1 h-1 rounded-full ${shift.is_day_off ? 'bg-error' : isSel ? 'bg-night' : 'bg-amber'}`} />}
-                {hasMission && !shift && <span className={`w-1 h-1 rounded-full ${isSel ? 'bg-night' : 'bg-muted'}`} />}
-              </div>
+              className={`aspect-[3/4] rounded-xl flex flex-col items-center justify-between py-1.5 px-0.5 relative ${isToday && !isSel ? 'ring-1 ring-amber/50' : ''}`}
+              style={{ background: bg }}>
+              <span className="text-xs font-medium" style={{ color: tips === 0 && !shift && !isSel ? '#7C8499' : textColor }}>{d}</span>
+              {tips > 0 && (
+                <span className="tnum font-display text-[0.7rem] font-semibold leading-none"
+                  style={{ color: isSel ? '#0B0E14' : '#E8B14C' }}>
+                  {eur(tips, 0)}€
+                </span>
+              )}
+              {shift && (
+                <span className="text-[0.55rem] leading-none" style={{ color: isSel ? 'rgba(11,14,20,0.7)' : '#7C8499' }}>
+                  {fmtHours(shift.hours)}{shift.is_day_off ? '·OFF' : ''}
+                </span>
+              )}
+              {!shift && tips === 0 && <span className="h-2" />}
             </button>
           )
         })}
+      </div>
+
+      {/* Légende */}
+      <div className="flex items-center gap-2 mt-3 text-[0.65rem] text-muted">
+        <span>Tips :</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ background: 'rgba(232,177,76,0.15)' }} />faible</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded" style={{ background: 'rgba(232,177,76,0.62)' }} />élevé</span>
+        <span className="flex items-center gap-1 ml-auto"><span className="w-2 h-2 rounded-full bg-error" />jour OFF</span>
       </div>
 
       {selected && (
@@ -136,8 +157,20 @@ export default function Calendar() {
             <h3 className="font-medium capitalize">
               {parseLocal(selDate).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
             </h3>
-            {!editing && <button onClick={openEdit} className="text-amber text-sm">{selShift ? 'Modifier' : 'Ajouter'}</button>}
+            {!editing && <button onClick={openEdit} className="text-amber text-sm">{selShift ? 'Modifier' : 'Ajouter shift'}</button>}
           </div>
+
+          {/* Tips du jour toujours visibles */}
+          {!editing && (
+            <div className="bg-night rounded-xl px-4 py-3 mb-3 flex items-baseline justify-between">
+              <span className="text-muted text-sm">Pourboires</span>
+              <div className="text-right">
+                <span className="tnum font-display font-bold text-amber text-2xl">{eur(selTips)}</span>
+                <span className="text-amber/50"> €</span>
+                {selCount > 0 && <p className="text-muted text-xs mt-0.5">{selCount} mission{selCount > 1 ? 's' : ''}</p>}
+              </div>
+            </div>
+          )}
 
           {editing ? (
             <div className="space-y-3">
