@@ -65,6 +65,8 @@ create table if not exists work_shifts (
   hours numeric(4,1) not null,
   overtime_hours numeric(4,1) default 0,
   is_day_off boolean default false,
+  night_hours numeric(5,2) default 0,
+  night_overtime_hours numeric(5,2) default 0,
   created_at timestamptz default now()
 );
 

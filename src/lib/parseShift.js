@@ -1,4 +1,19 @@
 export const BASE_SHIFT_MIN = 510   // 8h30
+export const NIGHT_START = 22 * 60  // 22h00
+export const NIGHT_END = 7 * 60     // 07h00
+
+// Une minute absolue (peut dépasser 1440) est-elle en plage nuit 22h-7h ?
+function isNight(absMin) {
+  const t = ((absMin % 1440) + 1440) % 1440
+  return t >= NIGHT_START || t < NIGHT_END
+}
+
+// Compte les minutes de nuit sur un intervalle [from, to) de minutes absolues.
+function nightMinutesIn(from, to) {
+  let count = 0
+  for (let t = from; t < to; t++) if (isNight(t)) count++
+  return count
+}
 
 function normDate(d, mo) {
   const year = new Date().getFullYear()
@@ -22,6 +37,19 @@ export function overtimeMin(workedMinutes, isDayOff) {
   return Math.max(0, workedMinutes - BASE_SHIFT_MIN)
 }
 
+// Minutes de nuit (22h-7h) d'un shift, et part de nuit dans les heures sup.
+// Les heures sup sont les DERNIÈRES minutes du shift (au-delà de 8h30, ou tout si OFF).
+export function nightBreakdown(shift, isDayOff) {
+  const worked = workedMin(shift)
+  const from = shift.start_min
+  const to = shift.start_min + worked
+  const nightTotal = nightMinutesIn(from, to)
+  const otMin = overtimeMin(worked, isDayOff)
+  // les sup occupent la fin du shift : [to - otMin, to)
+  const nightOt = otMin > 0 ? nightMinutesIn(to - otMin, to) : 0
+  return { night_hours: nightTotal / 60, night_overtime_hours: nightOt / 60 }
+}
+
 export function parseShifts(text) {
   const re = /(\d{1,2})\/(\d{1,2})\s*:\s*(\d{1,2})h?(\d{0,2})\s*-\s*(\d{1,2})h?(\d{0,2})([^\n]*)/gi
   const out = []
@@ -32,13 +60,17 @@ export function parseShifts(text) {
     if (end < start) end += 24 * 60
     const worked = end - start
     const isDayOff = /off/i.test(rest)
+    const shiftObj = { start_min: start, end_min: end }
+    const night = nightBreakdown(shiftObj, isDayOff)
     out.push({
       shift_date: normDate(d, mo),
       start_min: start,
       end_min: end % (24 * 60),
       hours: worked / 60,                              // valeur exacte (pas d'arrondi destructif)
       is_day_off: isDayOff,
-      overtime_hours: overtimeMin(worked, isDayOff) / 60
+      overtime_hours: overtimeMin(worked, isDayOff) / 60,
+      night_hours: night.night_hours,
+      night_overtime_hours: night.night_overtime_hours
     })
   }
   return out
@@ -47,10 +79,13 @@ export function parseShifts(text) {
 // Recalcule overtime_hours pour un shift existant (toggle OFF / édition horaires).
 export function recompute(shift, isDayOff) {
   const w = workedMin(shift)
+  const night = nightBreakdown(shift, isDayOff)
   return {
     hours: w / 60,
     overtime_hours: overtimeMin(w, isDayOff) / 60,
-    is_day_off: isDayOff
+    is_day_off: isDayOff,
+    night_hours: night.night_hours,
+    night_overtime_hours: night.night_overtime_hours
   }
 }
 

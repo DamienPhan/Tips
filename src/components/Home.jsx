@@ -22,7 +22,7 @@ export default function Home() {
   const [whole, cents] = eur(sum.tips).split(',')
 
   return (
-    <div className="px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-32">
+    <div className="px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-36">
       <div className="flex gap-1 mb-5 bg-surface rounded-xl p-1">
         {PERIODS.map(([k, lbl]) => (
           <button key={k} onClick={() => { setPeriod(k); setSel(null) }}
@@ -39,11 +39,18 @@ export default function Home() {
         <span className="font-display text-amber/40 text-2xl ml-1">€</span>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 mb-6">
+      <div className="grid grid-cols-3 gap-2 mb-2">
         <Stat label="Missions" value={sum.missionCount} />
         <Stat label="Heures" value={fmtHours(sum.hours)} />
         <Stat label="Sup" value={fmtHours(sum.overtime)} accent={sum.overtime > 0} />
       </div>
+      {(sum.night > 0 || sum.nightOvertime > 0) && (
+        <div className="grid grid-cols-2 gap-2 mb-6">
+          <Stat label="Heures de nuit" value={fmtHours(sum.night)} />
+          <Stat label="Sup de nuit" value={fmtHours(sum.nightOvertime)} accent={sum.nightOvertime > 0} />
+        </div>
+      )}
+      {!(sum.night > 0 || sum.nightOvertime > 0) && <div className="mb-6" />}
 
       <section className="bg-surface rounded-2xl p-4 mb-4">
         <h3 className="font-medium text-sm mb-3">Revenus</h3>
@@ -92,7 +99,41 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      <ExportSection shifts={shifts} />
     </div>
+  )
+}
+
+function ExportSection({ shifts }) {
+  const [busy, setBusy] = useState(null)
+  const run = async (kind) => {
+    setBusy(kind)
+    try {
+      const mod = await import('../lib/exportData')
+      if (kind === 'xlsx') await mod.exportXlsx(shifts)
+      else await mod.exportPdf(shifts)
+    } catch (e) {
+      console.error('Export échoué', e)
+      alert("L'export a échoué. Réessaie.")
+    }
+    setBusy(null)
+  }
+  return (
+    <section className="bg-surface rounded-2xl p-4 mt-4">
+      <h3 className="font-medium text-sm mb-1">Relevé d'heures</h3>
+      <p className="text-muted text-xs mb-3">Récapitulatif mensuel : jours travaillés, heures, sup, jours OFF.</p>
+      <div className="flex gap-2">
+        <button onClick={() => run('xlsx')} disabled={busy}
+          className="flex-1 bg-surface-2 text-[#E6E9EF] rounded-xl py-3 text-sm font-medium active:bg-white/10 disabled:opacity-50">
+          {busy === 'xlsx' ? '…' : 'Excel'}
+        </button>
+        <button onClick={() => run('pdf')} disabled={busy}
+          className="flex-1 bg-surface-2 text-[#E6E9EF] rounded-xl py-3 text-sm font-medium active:bg-white/10 disabled:opacity-50">
+          {busy === 'pdf' ? '…' : 'PDF'}
+        </button>
+      </div>
+    </section>
   )
 }
 
