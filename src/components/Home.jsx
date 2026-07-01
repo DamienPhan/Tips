@@ -217,7 +217,7 @@ function ExportSection({ shifts }) {
       else await mod.exportPdf(shifts)
     } catch (e) {
       console.error('Export échoué', e)
-      alert("L'export a échoué. Réessaie.")
+      alert(`L'export a échoué : ${e.message || e}`)
     }
     setBusy(null)
   }

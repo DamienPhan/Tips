@@ -9,12 +9,15 @@ function fmtHours(h) {
 }
 
 function fmtClock(min) {
-  const h = Math.floor(min / 60) % 24
-  const m = min % 60
+  const n = Number(min)
+  if (!Number.isFinite(n)) return '—'
+  const h = Math.floor(n / 60) % 24
+  const m = ((n % 60) + 60) % 60
   return m ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`
 }
 
 function dayName(dateStr) {
+  if (!dateStr) return '—'
   const [y, m, d] = dateStr.split('-').map(Number)
   return DOW[new Date(y, m - 1, d).getDay()]
 }
@@ -22,6 +25,7 @@ function dayName(dateStr) {
 export function monthlyDetail(shifts) {
   const map = new Map()
   for (const s of shifts) {
+    if (!s.shift_date) continue // ligne corrompue (date manquante) : ignorée plutôt que de faire échouer tout l'export
     const key = s.shift_date.slice(0, 7)
     if (!map.has(key)) map.set(key, [])
     map.get(key).push(s)
