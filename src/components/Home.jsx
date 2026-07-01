@@ -11,6 +11,15 @@ const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet'
 
 function eur(n, dec = 2) { return Number(n || 0).toFixed(dec).replace('.', ',') }
 
+function Amt({ revealed, onToggle, blur = 6, className = '', children }) {
+  return (
+    <span onClick={onToggle} className={`transition-[filter] duration-200 cursor-pointer ${revealed ? '' : 'select-none'} ${className}`}
+      style={{ filter: revealed ? 'none' : `blur(${blur}px)` }}>
+      {children}
+    </span>
+  )
+}
+
 function isoWeek(d) {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
   const day = date.getUTCDay() || 7
@@ -60,6 +69,7 @@ export default function Home() {
   const changePeriod = (k) => { setPeriod(k); setSel(null); setRefDate(new Date()) }
   const goPrev = () => setRefDate(d => shiftRefDate(period, d, -1))
   const goNext = () => canGoNext && setRefDate(d => shiftRefDate(period, d, 1))
+  const toggleRevealed = () => setRevealed(r => !r)
 
   return (
     <div className="px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-36">
@@ -81,7 +91,7 @@ export default function Home() {
             className="text-muted active:text-amber px-1.5 py-0.5 text-sm disabled:opacity-30">›</button>
         </div>
       </div>
-      <button onClick={() => setRevealed(r => !r)} aria-label={revealed ? 'Masquer le montant' : 'Afficher le montant'}
+      <button onClick={toggleRevealed} aria-label={revealed ? 'Masquer le montant' : 'Afficher le montant'}
         className={`flex items-baseline gap-1 text-left ${revealed ? '' : 'select-none'}`}>
         <span className="tnum font-display font-bold text-amber leading-none transition-[filter] duration-200"
           style={{ fontSize: 'clamp(2.75rem,16vw,4rem)', filter: revealed ? 'none' : 'blur(14px)' }}>{whole}</span>
@@ -108,11 +118,14 @@ export default function Home() {
 
       <section className="bg-surface rounded-2xl p-4 mb-4">
         <h3 className="font-medium text-sm mb-3">Revenus</h3>
-        <BarChart bars={bars} period={period} sel={sel} onSel={setSel} />
+        <BarChart bars={bars} period={period} sel={sel} onSel={setSel} revealed={revealed} />
         {sel != null && bars[sel] && (
           <div className="mt-3 bg-night rounded-xl px-3 py-2.5 flex justify-between items-center">
             <span className="text-sm text-muted">{barLabel(bars[sel].key, period)}</span>
-            <span className="text-sm"><span className="tnum font-display text-amber font-semibold">{eur(bars[sel].tips, 0)} €</span> · {bars[sel].count} mission{bars[sel].count > 1 ? 's' : ''}</span>
+            <span className="text-sm">
+              <Amt revealed={revealed} onToggle={toggleRevealed} className="tnum font-display text-amber font-semibold">{eur(bars[sel].tips, 0)} €</Amt>
+              {' '}· {bars[sel].count} mission{bars[sel].count > 1 ? 's' : ''}
+            </span>
           </div>
         )}
       </section>
@@ -120,14 +133,14 @@ export default function Home() {
       <section className="bg-surface rounded-2xl p-4 mb-4">
         <h3 className="font-medium text-sm mb-1">Moyenne par jour travaillé</h3>
         <div className="flex items-baseline gap-1 mb-2">
-          <span className="tnum font-display font-bold text-amber text-3xl">{eur(avg.avg)}</span>
+          <Amt revealed={revealed} onToggle={toggleRevealed} blur={8} className="tnum font-display font-bold text-amber text-3xl">{eur(avg.avg)}</Amt>
           <span className="font-display text-amber/40 text-lg ml-0.5">€</span>
         </div>
         {avg.days > 0 && (
           <div className="flex gap-4 text-xs text-muted">
             <span>{avg.days} jour{avg.days > 1 ? 's' : ''}</span>
-            <span className="text-synced">Max {eur(avg.max, 0)} €</span>
-            <span className="text-error/80">Min {eur(avg.min, 0)} €</span>
+            <span className="text-synced">Max <Amt revealed={revealed} onToggle={toggleRevealed}>{eur(avg.max, 0)} €</Amt></span>
+            <span className="text-error/80">Min <Amt revealed={revealed} onToggle={toggleRevealed}>{eur(avg.min, 0)} €</Amt></span>
           </div>
         )}
       </section>
@@ -154,14 +167,14 @@ export default function Home() {
         )}
       </section>
 
-      <DispatchSection missions={missions} />
+      <DispatchSection missions={missions} revealed={revealed} onToggle={toggleRevealed} />
 
       <ExportSection shifts={shifts} />
     </div>
   )
 }
 
-function DispatchSection({ missions }) {
+function DispatchSection({ missions, revealed, onToggle }) {
   const r = lastMonthTips(missions)
   const eur = n => Number(n || 0).toFixed(2).replace('.', ',')
   return (
@@ -174,15 +187,17 @@ function DispatchSection({ missions }) {
         <div className="bg-night rounded-xl px-4 py-3">
           <div className="flex items-baseline justify-between mb-2">
             <span className="font-medium text-sm capitalize">{r.label}</span>
-            <span className="tnum font-display text-amber font-semibold text-lg">{eur(r.total)}<span className="text-amber/50 text-sm"> €</span></span>
+            <Amt revealed={revealed} onToggle={onToggle} className="tnum font-display text-amber font-semibold text-lg">
+              {eur(r.total)}<span className="text-amber/50 text-sm"> €</span>
+            </Amt>
           </div>
           <div className="flex gap-2">
             <div className="flex-1 bg-surface rounded-lg px-3 py-2 text-center">
-              <p className="tnum font-display text-error text-base">−{eur(r.dispatch)}</p>
+              <Amt revealed={revealed} onToggle={onToggle} className="tnum font-display text-error text-base block">−{eur(r.dispatch)}</Amt>
               <p className="text-muted text-[0.6rem] uppercase tracking-wide mt-0.5">Dispatch 10%</p>
             </div>
             <div className="flex-1 bg-surface rounded-lg px-3 py-2 text-center">
-              <p className="tnum font-display text-synced text-base">{eur(r.net)}</p>
+              <Amt revealed={revealed} onToggle={onToggle} className="tnum font-display text-synced text-base block">{eur(r.net)}</Amt>
               <p className="text-muted text-[0.6rem] uppercase tracking-wide mt-0.5">Net (90%)</p>
             </div>
           </div>
@@ -233,7 +248,7 @@ function Stat({ label, value, accent }) {
   )
 }
 
-function BarChart({ bars, period, sel, onSel }) {
+function BarChart({ bars, period, sel, onSel, revealed }) {
   if (bars.length === 0) return <p className="text-muted text-sm text-center py-6">Aucune donnée.</p>
   const max = Math.max(...bars.map(b => b.tips), 1)
   const W = 300, H = 130, PB = 18
@@ -251,7 +266,10 @@ function BarChart({ bars, period, sel, onSel }) {
             <rect x={x} y={0} width={bw} height={H - PB} fill="transparent" />
             <rect x={x} y={y} width={bw} height={Math.max(bh, 1)} rx="3"
               fill={active ? '#E8B14C' : 'rgba(232,177,76,0.55)'} />
-            {b.tips > 0 && <text x={x + bw / 2} y={y - 4} textAnchor="middle" fill="#E8B14C" fontSize="8">{Math.round(b.tips)}</text>}
+            {b.tips > 0 && (
+              <text x={x + bw / 2} y={y - 4} textAnchor="middle" fill="#E8B14C" fontSize="8"
+                style={{ filter: revealed ? 'none' : 'blur(3px)' }}>{Math.round(b.tips)}</text>
+            )}
             <text x={x + bw / 2} y={H - 5} textAnchor="middle" fill="#7C8499" fontSize="8">{barLabel(b.key, period)}</text>
           </g>
         )
