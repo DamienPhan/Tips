@@ -27,9 +27,10 @@ Requires `.env.local` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (see
 
 **Offline-first sync model** (`src/lib/sync.js`, backed by `src/lib/db.js`):
 - Every record gets a client-generated UUID at creation time, making writes idempotent (`upsert`) — safe to retry without creating duplicates.
-- Local writes go to Dexie first (`syncStatus: 'pending'`), then `flush()`/`flushShifts()` push pending rows to Supabase opportunistically (on save, on `online` event, on app init via `initSync()`).
-- `pullFromServer()`/`pullShifts()` merge remote rows into Dexie, but **skip any local row still `pending` or `error`** so an unsynced local edit is never clobbered by a stale server read.
-- `useOnline.js` exposes online/pending-count state consumed by the sync indicator in `App.jsx`.
+- Local writes go to Dexie first (`syncStatus: 'pending'`), then `flush()`/`flushShifts()` push pending/`error`/`pending-delete` rows to Supabase opportunistically (on save, on `online` event, on app init via `initSync()`). Rows that fail to sync are marked `error` and are **retried on every subsequent flush**, not dropped.
+- Deletes go through the same queue: `deleteMission`/`deleteShift` delete immediately (local + remote) when online and the remote call succeeds; otherwise the row is kept locally and flipped to `syncStatus: 'pending-delete'` so the deletion is retried and propagated once back online, instead of being silently lost. `loadAll()`/`loadShifts()` filter out `pending-delete` rows so they disappear from the UI immediately regardless.
+- `pullFromServer()`/`pullShifts()` merge remote rows into Dexie, but **skip any local row still `pending`, `error`, or `pending-delete`** so an unsynced local write/delete is never clobbered by a stale server read. The `online` event handler runs `pullFromServer`/`pullShifts` after flushing, so reconnecting also reconciles rows changed remotely (e.g. from another device) while this one was offline.
+- `useOnline.js`'s `useSyncStatus(missions, shifts)` counts pending/error/pending-delete rows across **both** tables for the sync indicator in `App.jsx` — pass both arrays, not just `missions`, or shift-only changes won't refresh the badge.
 - Each entity module (`saveMission`/`saveShift`, etc.) whitelists a fixed `COLUMNS`/`SHIFT_COLUMNS` array before writing to Supabase — when adding a new field to a mission or shift, update both the Postgres schema and this column whitelist, or it will silently not sync.
 
 **State layer** (`src/store/missions.js`): a single zustand store (`useMissions`) holding both `missions` and `shifts` in memory, backed entirely by the `sync.js` functions above — components never talk to Dexie or Supabase directly.
@@ -43,3 +44,7 @@ Requires `.env.local` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (see
 **Dates**: always stored/compared as `YYYY-MM-DD` local-date strings (`src/lib/date.js`: `todayLocal()`/`parseLocal()`), specifically to avoid UTC-shift bugs — never use `new Date(dateString)` directly on these values.
 
 **Export** (`src/lib/exportData.js`): generates monthly hours summaries as `.xlsx` (via `xlsx`) and `.pdf` (via `jspdf`), both dynamically imported to keep them out of the main bundle.
+
+**Dispatch split** (`src/lib/dispatch.js`): `tipsByMonth()` groups tips by month and applies a hardcoded `DISPATCH_RATE` (10%) to compute the share owed back to dispatch vs. net kept — rendered in `Home.jsx`'s "Partage dispatch" section.
+
+**Only `App.jsx`'s import graph is live.** It renders `Auth`, `Home`, `Calendar`, `MissionsList`, `MissionForm`, `ImportModal` — that's the entire component tree. If you're exploring `src/components/`, don't assume a file is wired in just because it exists; verify it's reachable from `App.jsx` before treating its logic as current behavior. (Five stale/superseded components — `Charts.jsx`, `Stats.jsx`, `DayTotal.jsx`, `Shifts.jsx`, `ImportReport.jsx` — were removed for this reason; their functionality is already covered by `Home.jsx`, `Calendar.jsx`, and `ImportModal.jsx`.)

@@ -17,8 +17,9 @@ export default function App() {
   const [importing, setImporting] = useState(false)
   const [editing, setEditing] = useState(null)
   const missions = useMissions(s => s.missions)
+  const shifts = useMissions(s => s.shifts)
   const init = useMissions(s => s.init)
-  const { online, pending } = useSyncStatus(missions)
+  const { online, pending } = useSyncStatus(missions, shifts)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => { setSession(data.session); setReady(true) })

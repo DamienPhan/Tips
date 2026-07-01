@@ -30,14 +30,32 @@ export async function saveMission(mission) {
 }
 
 export async function deleteMission(id) {
-  await db.missions.delete(id)
-  if (navigator.onLine) await supabase.from('missions').delete().eq('id', id)
+  const local = await db.missions.get(id)
+  if (navigator.onLine) {
+    const { error } = await supabase.from('missions').delete().eq('id', id)
+    if (error) {
+      console.error('Échec suppression mission', id, error.message)
+      await db.missions.update(id, { syncStatus: 'pending-delete' })
+      return
+    }
+    await db.missions.delete(id)
+    return
+  }
+  // Hors ligne : si jamais synchronisée, on marque la suppression pour la propager au retour du réseau.
+  if (local?.syncStatus === 'synced') await db.missions.update(id, { syncStatus: 'pending-delete' })
+  else await db.missions.delete(id)
 }
 
 export async function flush() {
   if (!navigator.onLine) return
-  const pending = await db.missions.where('syncStatus').equals('pending').toArray()
+  const pending = await db.missions.where('syncStatus').anyOf('pending', 'error', 'pending-delete').toArray()
   for (const m of pending) {
+    if (m.syncStatus === 'pending-delete') {
+      const { error } = await supabase.from('missions').delete().eq('id', m.id)
+      if (error) console.error('Échec suppression différée', m.id, error.message)
+      else await db.missions.delete(m.id)
+      continue
+    }
     const { error } = await supabase.from('missions').upsert(toPayload(m))
     if (error) {
       console.error('Échec sync mission', m.booking_ref, error.message)
@@ -55,18 +73,22 @@ export async function pullFromServer() {
   await db.transaction('rw', db.missions, async () => {
     for (const row of data) {
       const local = await db.missions.get(row.id)
-      if (local?.syncStatus === 'pending' || local?.syncStatus === 'error') continue // ne pas écraser un write local non synchronisé
+      if (local?.syncStatus === 'pending' || local?.syncStatus === 'error' || local?.syncStatus === 'pending-delete') continue // ne pas écraser un write local non synchronisé
       await db.missions.put({ ...row, syncStatus: 'synced' })
     }
   })
 }
 
 export async function loadAll() {
-  return db.missions.orderBy('intervention_date').reverse().toArray()
+  const all = await db.missions.orderBy('intervention_date').reverse().toArray()
+  return all.filter(m => m.syncStatus !== 'pending-delete')
 }
 
 export function initSync() {
-  window.addEventListener('online', () => { flush(); flushShifts() })
+  window.addEventListener('online', async () => {
+    await flush(); await flushShifts()
+    await pullFromServer(); await pullShifts()
+  })
   flush()
   flushShifts()
   pullFromServer()
@@ -89,14 +111,31 @@ export async function saveShift(shift) {
 }
 
 export async function deleteShift(id) {
-  await db.shifts.delete(id)
-  if (navigator.onLine) await supabase.from('work_shifts').delete().eq('id', id)
+  const local = await db.shifts.get(id)
+  if (navigator.onLine) {
+    const { error } = await supabase.from('work_shifts').delete().eq('id', id)
+    if (error) {
+      console.error('Échec suppression shift', id, error.message)
+      await db.shifts.update(id, { syncStatus: 'pending-delete' })
+      return
+    }
+    await db.shifts.delete(id)
+    return
+  }
+  if (local?.syncStatus === 'synced') await db.shifts.update(id, { syncStatus: 'pending-delete' })
+  else await db.shifts.delete(id)
 }
 
 export async function flushShifts() {
   if (!navigator.onLine) return
-  const pending = await db.shifts.where('syncStatus').equals('pending').toArray()
+  const pending = await db.shifts.where('syncStatus').anyOf('pending', 'error', 'pending-delete').toArray()
   for (const s of pending) {
+    if (s.syncStatus === 'pending-delete') {
+      const { error } = await supabase.from('work_shifts').delete().eq('id', s.id)
+      if (error) console.error('Échec suppression différée', s.id, error.message)
+      else await db.shifts.delete(s.id)
+      continue
+    }
     const { error } = await supabase.from('work_shifts').upsert(toShiftPayload(s))
     if (error) {
       console.error('Échec sync shift', s.shift_date, error.message)
@@ -114,12 +153,13 @@ export async function pullShifts() {
   await db.transaction('rw', db.shifts, async () => {
     for (const row of data) {
       const local = await db.shifts.get(row.id)
-      if (local?.syncStatus === 'pending' || local?.syncStatus === 'error') continue
+      if (local?.syncStatus === 'pending' || local?.syncStatus === 'error' || local?.syncStatus === 'pending-delete') continue
       await db.shifts.put({ ...row, syncStatus: 'synced' })
     }
   })
 }
 
 export async function loadShifts() {
-  return db.shifts.orderBy('shift_date').reverse().toArray()
+  const all = await db.shifts.orderBy('shift_date').reverse().toArray()
+  return all.filter(s => s.syncStatus !== 'pending-delete')
 }

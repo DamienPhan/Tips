@@ -6,7 +6,3 @@ dist-ssr
 .DS_Store
 *.log
 .vite
-.vscode/*
-!.vscode/extensions.json
-.idea
-Thumbs.db

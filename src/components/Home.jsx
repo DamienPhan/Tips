@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMissions } from '../store/missions'
 import { summary } from '../lib/summary'
 import { revenueBars, serviceBreakdown, dailyAverage, barLabel } from '../lib/charts'
+import { tipsByMonth, DISPATCH_RATE } from '../lib/dispatch'
 import { fmtHours } from '../lib/parseShift'
 
 const PERIODS = [['week', 'Semaine'], ['month', 'Mois'], ['year', 'Année']]
@@ -100,8 +101,45 @@ export default function Home() {
         )}
       </section>
 
+      <DispatchSection missions={missions} />
+
       <ExportSection shifts={shifts} />
     </div>
+  )
+}
+
+function DispatchSection({ missions }) {
+  const rows = tipsByMonth(missions)
+  const eur = n => Number(n || 0).toFixed(2).replace('.', ',')
+  return (
+    <section className="bg-surface rounded-2xl p-4 mt-4">
+      <h3 className="font-medium text-sm mb-1">Partage dispatch</h3>
+      <p className="text-muted text-xs mb-3">Total des pourboires par mois et part de {Math.round(DISPATCH_RATE * 100)}% à reverser.</p>
+      {rows.length === 0 ? (
+        <p className="text-muted text-sm text-center py-4">Aucun pourboire enregistré.</p>
+      ) : (
+        <div className="space-y-2">
+          {rows.map(r => (
+            <div key={r.key} className="bg-night rounded-xl px-4 py-3">
+              <div className="flex items-baseline justify-between mb-2">
+                <span className="font-medium text-sm capitalize">{r.label}</span>
+                <span className="tnum font-display text-amber font-semibold text-lg">{eur(r.total)}<span className="text-amber/50 text-sm"> €</span></span>
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1 bg-surface rounded-lg px-3 py-2 text-center">
+                  <p className="tnum font-display text-error text-base">−{eur(r.dispatch)}</p>
+                  <p className="text-muted text-[0.6rem] uppercase tracking-wide mt-0.5">Dispatch 10%</p>
+                </div>
+                <div className="flex-1 bg-surface rounded-lg px-3 py-2 text-center">
+                  <p className="tnum font-display text-synced text-base">{eur(r.net)}</p>
+                  <p className="text-muted text-[0.6rem] uppercase tracking-wide mt-0.5">Net (90%)</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   )
 }
 
