@@ -7,33 +7,79 @@ import { fmtHours } from '../lib/parseShift'
 
 const PERIODS = [['week', 'Semaine'], ['month', 'Mois'], ['year', 'Année']]
 const SERVICE = [['ARR', 'Arrivée', '#E8B14C'], ['DEP', 'Départ', '#5DCAA5'], ['TRANSIT', 'Transit', '#7C8499']]
+const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 
 function eur(n, dec = 2) { return Number(n || 0).toFixed(dec).replace('.', ',') }
+
+function isoWeek(d) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+  const day = date.getUTCDay() || 7
+  date.setUTCDate(date.getUTCDate() + 4 - day)
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1))
+  const week = Math.ceil((((date - yearStart) / 86400000) + 1) / 7)
+  return { year: date.getUTCFullYear(), week }
+}
+
+function periodKey(period, d) {
+  if (period === 'year') return String(d.getFullYear())
+  if (period === 'month') return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  const { year, week } = isoWeek(d)
+  return `${year}-S${String(week).padStart(2, '0')}`
+}
+
+function periodLabel(period, d) {
+  if (period === 'year') return String(d.getFullYear())
+  if (period === 'month') return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`
+  const { year, week } = isoWeek(d)
+  return `Semaine ${week} · ${year}`
+}
+
+function shiftRefDate(period, d, delta) {
+  const next = new Date(d)
+  if (period === 'year') next.setFullYear(next.getFullYear() + delta)
+  else if (period === 'month') next.setMonth(next.getMonth() + delta)
+  else next.setDate(next.getDate() + delta * 7)
+  return next
+}
 
 export default function Home() {
   const missions = useMissions(s => s.missions)
   const shifts = useMissions(s => s.shifts)
   const [period, setPeriod] = useState('month')
   const [sel, setSel] = useState(null)
+  const [refDate, setRefDate] = useState(new Date())
 
-  const sum = summary(missions, shifts, period)
+  const sum = summary(missions, shifts, period, refDate)
   const bars = revenueBars(missions, period)
   const svc = serviceBreakdown(missions)
   const avg = dailyAverage(missions)
   const [whole, cents] = eur(sum.tips).split(',')
+  const canGoNext = periodKey(period, refDate) !== periodKey(period, new Date())
+
+  const changePeriod = (k) => { setPeriod(k); setSel(null); setRefDate(new Date()) }
+  const goPrev = () => setRefDate(d => shiftRefDate(period, d, -1))
+  const goNext = () => canGoNext && setRefDate(d => shiftRefDate(period, d, 1))
 
   return (
     <div className="px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-36">
       <div className="flex gap-1 mb-5 bg-surface rounded-xl p-1">
         {PERIODS.map(([k, lbl]) => (
-          <button key={k} onClick={() => { setPeriod(k); setSel(null) }}
+          <button key={k} onClick={() => changePeriod(k)}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${period === k ? 'bg-amber text-night' : 'text-muted'}`}>
             {lbl}
           </button>
         ))}
       </div>
 
-      <p className="text-muted text-[0.7rem] uppercase tracking-[0.2em] mb-1">Gains totaux</p>
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-muted text-[0.7rem] uppercase tracking-[0.2em]">Gains totaux</p>
+        <div className="flex items-center gap-1">
+          <button onClick={goPrev} aria-label="Période précédente" className="text-muted active:text-amber px-1.5 py-0.5 text-sm">‹</button>
+          <span className="text-muted text-[0.7rem] tnum min-w-[6rem] text-center">{periodLabel(period, refDate)}</span>
+          <button onClick={goNext} disabled={!canGoNext} aria-label="Période suivante"
+            className="text-muted active:text-amber px-1.5 py-0.5 text-sm disabled:opacity-30">›</button>
+        </div>
+      </div>
       <div className="flex items-baseline gap-1 mb-4">
         <span className="tnum font-display font-bold text-amber leading-none" style={{ fontSize: 'clamp(2.75rem,16vw,4rem)' }}>{whole}</span>
         <span className="tnum font-display font-bold text-amber/80 text-3xl">,{cents}</span>
