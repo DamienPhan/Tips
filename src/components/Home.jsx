@@ -48,6 +48,7 @@ export default function Home() {
   const [period, setPeriod] = useState('month')
   const [sel, setSel] = useState(null)
   const [refDate, setRefDate] = useState(new Date())
+  const [revealed, setRevealed] = useState(false)
 
   const sum = summary(missions, shifts, period, refDate)
   const bars = revenueBars(missions, period)
@@ -80,11 +81,17 @@ export default function Home() {
             className="text-muted active:text-amber px-1.5 py-0.5 text-sm disabled:opacity-30">›</button>
         </div>
       </div>
-      <div className="flex items-baseline gap-1 mb-4">
-        <span className="tnum font-display font-bold text-amber leading-none" style={{ fontSize: 'clamp(2.75rem,16vw,4rem)' }}>{whole}</span>
-        <span className="tnum font-display font-bold text-amber/80 text-3xl">,{cents}</span>
+      <button onClick={() => setRevealed(r => !r)} aria-label={revealed ? 'Masquer le montant' : 'Afficher le montant'}
+        className={`flex items-baseline gap-1 text-left ${revealed ? '' : 'select-none'}`}>
+        <span className="tnum font-display font-bold text-amber leading-none transition-[filter] duration-200"
+          style={{ fontSize: 'clamp(2.75rem,16vw,4rem)', filter: revealed ? 'none' : 'blur(14px)' }}>{whole}</span>
+        <span className="tnum font-display font-bold text-amber/80 text-3xl transition-[filter] duration-200"
+          style={{ filter: revealed ? 'none' : 'blur(10px)' }}>,{cents}</span>
         <span className="font-display text-amber/40 text-2xl ml-1">€</span>
-      </div>
+      </button>
+      <p className={`text-muted/60 text-[0.65rem] mb-4 transition-opacity ${revealed ? 'opacity-0' : 'opacity-100'}`}>
+        Touche le montant pour l'afficher
+      </p>
 
       <div className="grid grid-cols-3 gap-2 mb-2">
         <Stat label="Missions" value={sum.missionCount} />
