@@ -31,7 +31,7 @@ export default function MissionsList({ onEdit }) {
   }, [filtered])
 
   return (
-    <div className="px-4 pt-3 pb-36">
+    <div className="px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-36">
       <div className="relative mb-4">
         <input
           type="text" value={query} onChange={e => setQuery(e.target.value)}

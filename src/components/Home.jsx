@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useMissions } from '../store/missions'
 import { summary } from '../lib/summary'
 import { revenueBars, serviceBreakdown, dailyAverage, barLabel } from '../lib/charts'
@@ -208,13 +208,23 @@ function DispatchSection({ missions, revealed, onToggle }) {
 }
 
 function ExportSection({ shifts }) {
+  const now = new Date()
+  const [year, setYear] = useState(now.getFullYear())
+  const [month, setMonth] = useState(now.getMonth())
   const [busy, setBusy] = useState(null)
+
+  const prevMonth = () => { if (month === 0) { setMonth(11); setYear(y => y - 1) } else setMonth(m => m - 1) }
+  const nextMonth = () => { if (month === 11) { setMonth(0); setYear(y => y + 1) } else setMonth(m => m + 1) }
+
+  const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`
+  const monthShifts = useMemo(() => shifts.filter(s => (s.shift_date || '').slice(0, 7) === monthKey), [shifts, monthKey])
+
   const run = async (kind) => {
     setBusy(kind)
     try {
       const mod = await import('../lib/exportData')
-      if (kind === 'xlsx') await mod.exportXlsx(shifts)
-      else await mod.exportPdf(shifts)
+      if (kind === 'xlsx') await mod.exportXlsx(monthShifts, monthKey)
+      else await mod.exportPdf(monthShifts, monthKey)
     } catch (e) {
       console.error('Export échoué', e)
       alert(`L'export a échoué : ${e.message || e}`)
@@ -224,7 +234,12 @@ function ExportSection({ shifts }) {
   return (
     <section className="bg-surface rounded-2xl p-4 mt-4">
       <h3 className="font-medium text-sm mb-1">Relevé d'heures</h3>
-      <p className="text-muted text-xs mb-3">Récapitulatif mensuel : jours travaillés, heures, sup, jours OFF.</p>
+      <p className="text-muted text-xs mb-3">Récapitulatif du mois : jours travaillés, heures, sup, jours OFF.</p>
+      <div className="flex items-center justify-between mb-3 bg-night rounded-xl px-1 py-1">
+        <button onClick={prevMonth} aria-label="Mois précédent" className="w-9 h-9 rounded-lg text-amber text-lg active:bg-surface-2">‹</button>
+        <span className="tnum text-sm">{MONTHS[month]} {year}</span>
+        <button onClick={nextMonth} aria-label="Mois suivant" className="w-9 h-9 rounded-lg text-amber text-lg active:bg-surface-2">›</button>
+      </div>
       <div className="flex gap-2">
         <button onClick={() => run('xlsx')} disabled={busy}
           className="flex-1 bg-surface-2 text-[#E6E9EF] rounded-xl py-3 text-sm font-medium active:bg-white/10 disabled:opacity-50">

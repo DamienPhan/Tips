@@ -1,3 +1,5 @@
+import { todayLocal } from './date'
+
 const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 const DOW = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
 
@@ -59,7 +61,7 @@ function rowCells(s) {
   ]
 }
 
-export async function exportXlsx(shifts) {
+export async function exportXlsx(shifts, monthKey) {
   const XLSX = await import('xlsx')
   const months = monthlyDetail(shifts)
   const wb = XLSX.utils.book_new()
@@ -74,10 +76,10 @@ export async function exportXlsx(shifts) {
     XLSX.utils.book_append_sheet(wb, ws, m.sheet)
   }
   if (months.length === 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([HEAD]), 'Vide')
-  XLSX.writeFile(wb, `heures-${new Date().getFullYear()}.xlsx`)
+  XLSX.writeFile(wb, `heures-${months[0]?.key || monthKey || todayLocal().slice(0, 7)}.xlsx`)
 }
 
-export async function exportPdf(shifts) {
+export async function exportPdf(shifts, monthKey) {
   const { jsPDF } = await import('jspdf')
   const months = monthlyDetail(shifts)
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
@@ -122,5 +124,5 @@ export async function exportPdf(shifts) {
   })
 
   if (months.length === 0) doc.text('Aucune donnée.', W / 2, 40, { align: 'center' })
-  doc.save(`heures-${new Date().getFullYear()}.pdf`)
+  doc.save(`heures-${months[0]?.key || monthKey || todayLocal().slice(0, 7)}.pdf`)
 }

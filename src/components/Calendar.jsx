@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMissions } from '../store/missions'
-import { fmtHours, fmtMinutes, recompute, workedMin, overtimeMin } from '../lib/parseShift'
+import { fmtHours, fmtMinutes, recompute, workedMin, overtimePayMin } from '../lib/parseShift'
 import { parseLocal } from '../lib/date'
 
 const DOW = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
@@ -87,12 +87,12 @@ export default function Calendar() {
     const s = parseTime(startStr), e = parseTime(endStr)
     if (s !== null && e !== null) {
       const w = workedMin({ start_min: s, end_min: e })
-      preview = { brut: fmtHours(w / 60), sup: fmtHours(overtimeMin(w, editOff) / 60) }
+      preview = { brut: fmtHours(w / 60), sup: fmtHours(overtimePayMin(w, editOff) / 60) }
     }
   }
 
   return (
-    <div className="px-4 pt-3 pb-36">
+    <div className="px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-36">
       {/* Navigation mois — grandes zones tactiles */}
       <div className="flex items-stretch gap-2 mb-4">
         <button onClick={prevMonth} aria-label="Mois précédent"
@@ -191,7 +191,7 @@ export default function Calendar() {
               </div>
               <button onClick={() => setEditOff(!editOff)}
                 className={`w-full py-3 rounded-xl text-sm font-medium ${editOff ? 'bg-error/15 text-error' : 'bg-surface-2 text-muted'}`}>
-                {editOff ? '✓ Jour OFF travaillé (100% sup)' : 'Jour normal'}
+                {editOff ? '✓ Jour OFF travaillé (payé double)' : 'Jour normal'}
               </button>
               {preview && (
                 <div className="flex justify-between text-sm bg-night rounded-xl px-3 py-2.5">
@@ -215,7 +215,7 @@ export default function Calendar() {
 
               {selShift.is_day_off && (
                 <div className="bg-error/10 rounded-xl px-3 py-2.5 mt-2 mb-1">
-                  <p className="text-error text-xs">Jour OFF travaillé : les {fmtHours(selShift.hours)} sont comptées intégralement en heures supplémentaires.</p>
+                  <p className="text-error text-xs">Jour OFF travaillé : payé double, soit {fmtHours(selShift.hours)} travaillées comptées pour {fmtHours(selShift.overtime_hours)} d'heures supplémentaires.</p>
                 </div>
               )}
 
