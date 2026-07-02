@@ -216,17 +216,15 @@ function ExportSection({ shifts }) {
   const prevMonth = () => { if (month === 0) { setMonth(11); setYear(y => y - 1) } else setMonth(m => m - 1) }
   const nextMonth = () => { if (month === 11) { setMonth(0); setYear(y => y + 1) } else setMonth(m => m + 1) }
 
-  const monthShifts = useMemo(() => {
-    const key = `${year}-${String(month + 1).padStart(2, '0')}`
-    return shifts.filter(s => (s.shift_date || '').slice(0, 7) === key)
-  }, [shifts, year, month])
+  const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`
+  const monthShifts = useMemo(() => shifts.filter(s => (s.shift_date || '').slice(0, 7) === monthKey), [shifts, monthKey])
 
   const run = async (kind) => {
     setBusy(kind)
     try {
       const mod = await import('../lib/exportData')
-      if (kind === 'xlsx') await mod.exportXlsx(monthShifts)
-      else await mod.exportPdf(monthShifts)
+      if (kind === 'xlsx') await mod.exportXlsx(monthShifts, monthKey)
+      else await mod.exportPdf(monthShifts, monthKey)
     } catch (e) {
       console.error('Export échoué', e)
       alert(`L'export a échoué : ${e.message || e}`)
