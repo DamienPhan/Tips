@@ -74,7 +74,8 @@ export async function exportXlsx(shifts) {
     XLSX.utils.book_append_sheet(wb, ws, m.sheet)
   }
   if (months.length === 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([HEAD]), 'Vide')
-  XLSX.writeFile(wb, `heures-${new Date().getFullYear()}.xlsx`)
+  const name = months[0]?.key || new Date().toISOString().slice(0, 7)
+  XLSX.writeFile(wb, `heures-${name}.xlsx`)
 }
 
 export async function exportPdf(shifts) {
@@ -122,5 +123,6 @@ export async function exportPdf(shifts) {
   })
 
   if (months.length === 0) doc.text('Aucune donnée.', W / 2, 40, { align: 'center' })
-  doc.save(`heures-${new Date().getFullYear()}.pdf`)
+  const name = months[0]?.key || new Date().toISOString().slice(0, 7)
+  doc.save(`heures-${name}.pdf`)
 }
