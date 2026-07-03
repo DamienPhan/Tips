@@ -98,6 +98,9 @@ export function recompute(shift, isDayOff) {
   }
 }
 
+// Jour OFF non travaillé (is_day_off sans aucune heure), par opposition à un jour OFF travaillé (payé double).
+export function isRestDay(shift) { return !!shift?.is_day_off && !shift.hours }
+
 // Affiche des heures décimales en "XhMM" sans réarrondi (passe par les minutes).
 export function fmtHours(h) {
   const totalMin = Math.round(Number(h || 0) * 60)

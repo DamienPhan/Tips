@@ -1,4 +1,5 @@
 import { todayLocal } from './date'
+import { isRestDay } from './parseShift'
 
 const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 const DOW = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
@@ -53,7 +54,7 @@ function rowCells(s) {
   return [
     s.shift_date,
     dayName(s.shift_date),
-    `${fmtClock(s.start_min)} – ${fmtClock(s.end_min)}`,
+    isRestDay(s) ? 'OFF' : `${fmtClock(s.start_min)} – ${fmtClock(s.end_min)}`,
     fmtHours(s.hours),
     fmtHours(s.overtime_hours),
     fmtHours(s.night_hours),
