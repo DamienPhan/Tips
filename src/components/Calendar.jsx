@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMissions } from '../store/missions'
-import { fmtHours, fmtMinutes, recompute, workedMin, overtimePayMin } from '../lib/parseShift'
+import { fmtHours, fmtMinutes, recompute, workedMin, overtimePayMin, isRestDay } from '../lib/parseShift'
 import { parseLocal } from '../lib/date'
 
 const DOW = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
@@ -82,6 +82,12 @@ export default function Calendar() {
   const toggleOff = async () => { if (selShift) await updateShift({ ...selShift, ...recompute(selShift, !selShift.is_day_off) }) }
   const del = async () => { if (selShift && confirm('Supprimer ce shift ?')) { await removeShift(selShift.id); closeDetail() } }
 
+  const markRestDay = async () => {
+    const rec = recompute({ start_min: 0, end_min: 0 }, true)
+    if (selShift) await updateShift({ ...selShift, start_min: 0, end_min: 0, ...rec })
+    else await addShifts([{ shift_date: selDate, start_min: 0, end_min: 0, ...rec }])
+  }
+
   let preview = null
   if (editing) {
     const s = parseTime(startStr), e = parseTime(endStr)
@@ -125,6 +131,9 @@ export default function Calendar() {
             <button key={i} onClick={() => { setSelected(isSel ? null : d); setEditing(false); setErr('') }}
               className={`aspect-[3/4] rounded-xl flex flex-col items-center pt-1.5 px-0.5 relative ${isToday && !isSel ? 'ring-1 ring-amber/50' : ''}`}
               style={{ background: bg }}>
+              {shift?.is_day_off && (
+                <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-error" />
+              )}
               <span className="text-xs font-medium leading-none h-3.5 flex items-center" style={{ color: tips === 0 && !shift && !isSel ? '#7C8499' : textColor }}>{d}</span>
               <span className="flex-1 flex items-center justify-center">
                 {tips > 0 && (
@@ -137,7 +146,7 @@ export default function Calendar() {
               <span className="h-3.5 flex items-center justify-center mb-1">
                 {shift && (
                   <span className="text-[0.55rem] leading-none" style={{ color: isSel ? 'rgba(11,14,20,0.7)' : '#7C8499' }}>
-                    {fmtHours(shift.hours)}{shift.is_day_off ? '·OFF' : ''}
+                    {isRestDay(shift) ? 'OFF' : `${fmtHours(shift.hours)}${shift.is_day_off ? '·OFF' : ''}`}
                   </span>
                 )}
               </span>
@@ -205,17 +214,32 @@ export default function Calendar() {
                 <button onClick={saveEdit} className="flex-1 bg-amber text-night font-medium rounded-xl py-3 text-sm">Enregistrer</button>
               </div>
             </div>
+          ) : selShift && isRestDay(selShift) ? (
+            <>
+              <div className="bg-error/10 rounded-xl px-4 py-3.5 mb-1 flex items-center gap-2.5">
+                <span className="w-2 h-2 rounded-full bg-error shrink-0" />
+                <p className="text-sm">Jour OFF — non travaillé</p>
+              </div>
+
+              <button onClick={openEdit} className="w-full py-3.5 rounded-xl text-sm font-medium mt-2 bg-surface-2 text-[#E6E9EF]">
+                Ajouter des horaires (jour finalement travaillé)
+              </button>
+
+              <button onClick={del} className="w-full py-2.5 rounded-xl text-xs text-error/80 active:bg-error/10 mt-2">
+                Supprimer ce jour OFF
+              </button>
+            </>
           ) : selShift ? (
             <>
               <Row label="Horaires" value={`${fmtMinutes(selShift.start_min)} – ${fmtMinutes(selShift.end_min)}`} />
               <Row label="Durée brute" value={fmtHours(selShift.hours)} />
-              <Row label="Heures sup." value={selShift.overtime_hours > 0 ? fmtHours(selShift.overtime_hours) : '0h'} accent={selShift.overtime_hours > 0} />
+              <Row label={selShift.is_day_off ? 'Heures travaillées (OFF)' : 'Heures sup.'} value={selShift.overtime_hours > 0 ? fmtHours(selShift.overtime_hours) : '0h'} accent={selShift.overtime_hours > 0} />
               {selShift.night_hours > 0 && <Row label="Heures de nuit" value={fmtHours(selShift.night_hours)} />}
               {selShift.night_overtime_hours > 0 && <Row label="Sup de nuit" value={fmtHours(selShift.night_overtime_hours)} accent />}
 
               {selShift.is_day_off && (
                 <div className="bg-error/10 rounded-xl px-3 py-2.5 mt-2 mb-1">
-                  <p className="text-error text-xs">Jour OFF travaillé : payé double, soit {fmtHours(selShift.hours)} travaillées comptées pour {fmtHours(selShift.overtime_hours)} d'heures supplémentaires.</p>
+                  <p className="text-error text-xs">Jour OFF travaillé : payé double, soit {fmtHours(selShift.hours)} travaillées comptées pour {fmtHours(selShift.overtime_hours)} d'heures travaillées (OFF) — une catégorie à part des heures sup normales.</p>
                 </div>
               )}
 
@@ -232,7 +256,12 @@ export default function Calendar() {
               </button>
             </>
           ) : (
-            <p className="text-muted text-sm">Aucun shift enregistré ce jour. Appuie sur « Ajouter shift » ci-dessus.</p>
+            <>
+              <p className="text-muted text-sm mb-3">Aucun shift enregistré ce jour. Appuie sur « Ajouter shift » ci-dessus pour un jour travaillé.</p>
+              <button onClick={markRestDay} className="w-full py-3.5 rounded-xl text-sm font-medium bg-surface-2 text-[#E6E9EF]">
+                Marquer comme jour OFF (non travaillé)
+              </button>
+            </>
           )}
         </div>
       )}
