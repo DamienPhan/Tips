@@ -23,8 +23,11 @@ export function summary(missions, shifts, period, refDate = new Date()) {
   const ss = shifts.filter(s => inCurrentPeriod(s.shift_date, period, refDate))
   const tips = ms.reduce((a, m) => a + Number(m.tip_amount || 0), 0)
   const hours = ss.reduce((a, s) => a + Number(s.hours || 0), 0)
-  const overtime = ss.reduce((a, s) => a + Number(s.overtime_hours || 0), 0)
+  // Heures sup "normales" (jour travaillé classique) et heures d'un jour OFF travaillé (payé double)
+  // sont deux catégories distinctes : ne pas les sommer ensemble sous peine de mélanger deux taux de paie différents.
+  const overtime = ss.reduce((a, s) => a + (s.is_day_off ? 0 : Number(s.overtime_hours || 0)), 0)
+  const offWorked = ss.reduce((a, s) => a + (s.is_day_off ? Number(s.overtime_hours || 0) : 0), 0)
   const night = ss.reduce((a, s) => a + Number(s.night_hours || 0), 0)
   const nightOvertime = ss.reduce((a, s) => a + Number(s.night_overtime_hours || 0), 0)
-  return { tips, hours, overtime, night, nightOvertime, missionCount: ms.length, shiftCount: ss.length }
+  return { tips, hours, overtime, offWorked, night, nightOvertime, missionCount: ms.length, shiftCount: ss.length }
 }

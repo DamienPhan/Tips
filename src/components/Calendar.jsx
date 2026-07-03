@@ -233,13 +233,13 @@ export default function Calendar() {
             <>
               <Row label="Horaires" value={`${fmtMinutes(selShift.start_min)} – ${fmtMinutes(selShift.end_min)}`} />
               <Row label="Durée brute" value={fmtHours(selShift.hours)} />
-              <Row label="Heures sup." value={selShift.overtime_hours > 0 ? fmtHours(selShift.overtime_hours) : '0h'} accent={selShift.overtime_hours > 0} />
+              <Row label={selShift.is_day_off ? 'Heures travaillées (OFF)' : 'Heures sup.'} value={selShift.overtime_hours > 0 ? fmtHours(selShift.overtime_hours) : '0h'} accent={selShift.overtime_hours > 0} />
               {selShift.night_hours > 0 && <Row label="Heures de nuit" value={fmtHours(selShift.night_hours)} />}
               {selShift.night_overtime_hours > 0 && <Row label="Sup de nuit" value={fmtHours(selShift.night_overtime_hours)} accent />}
 
               {selShift.is_day_off && (
                 <div className="bg-error/10 rounded-xl px-3 py-2.5 mt-2 mb-1">
-                  <p className="text-error text-xs">Jour OFF travaillé : payé double, soit {fmtHours(selShift.hours)} travaillées comptées pour {fmtHours(selShift.overtime_hours)} d'heures supplémentaires.</p>
+                  <p className="text-error text-xs">Jour OFF travaillé : payé double, soit {fmtHours(selShift.hours)} travaillées comptées pour {fmtHours(selShift.overtime_hours)} d'heures travaillées (OFF) — une catégorie à part des heures sup normales.</p>
                 </div>
               )}
 

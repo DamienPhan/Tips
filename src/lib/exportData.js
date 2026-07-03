@@ -38,17 +38,20 @@ export function monthlyDetail(shifts) {
     .map(([key, list]) => {
       const [y, mo] = key.split('-')
       const rows = list.slice().sort((a, b) => (a.shift_date < b.shift_date ? -1 : 1))
+      // Heures sup "normales" et heures d'un jour OFF travaillé (payé double) sont deux catégories
+      // distinctes : ne pas les sommer ensemble sous peine de mélanger deux taux de paie différents.
       const total = rows.reduce((acc, s) => ({
         hours: acc.hours + Number(s.hours || 0),
-        overtime: acc.overtime + Number(s.overtime_hours || 0),
+        overtime: acc.overtime + (s.is_day_off ? 0 : Number(s.overtime_hours || 0)),
+        offWorked: acc.offWorked + (s.is_day_off ? Number(s.overtime_hours || 0) : 0),
         night: acc.night + Number(s.night_hours || 0),
         nightOvertime: acc.nightOvertime + Number(s.night_overtime_hours || 0)
-      }), { hours: 0, overtime: 0, night: 0, nightOvertime: 0 })
+      }), { hours: 0, overtime: 0, offWorked: 0, night: 0, nightOvertime: 0 })
       return { key, label: `${MONTHS[+mo - 1]} ${y}`, sheet: `${MONTHS[+mo - 1].slice(0, 4)} ${y}`, rows, total }
     })
 }
 
-const HEAD = ['Date', 'Jour', 'Horaires', 'Durée', 'Sup', 'Nuit', 'Sup nuit']
+const HEAD = ['Date', 'Jour', 'Horaires', 'Durée', 'Sup', 'OFF trav.', 'Nuit', 'Sup nuit']
 
 function rowCells(s) {
   return [
@@ -56,7 +59,8 @@ function rowCells(s) {
     dayName(s.shift_date),
     isRestDay(s) ? 'OFF' : `${fmtClock(s.start_min)} – ${fmtClock(s.end_min)}`,
     fmtHours(s.hours),
-    fmtHours(s.overtime_hours),
+    fmtHours(s.is_day_off ? 0 : s.overtime_hours),
+    fmtHours(s.is_day_off ? s.overtime_hours : 0),
     fmtHours(s.night_hours),
     fmtHours(s.night_overtime_hours)
   ]
@@ -70,10 +74,10 @@ export async function exportXlsx(shifts, monthKey) {
     const data = [
       HEAD,
       ...m.rows.map(rowCells),
-      ['TOTAL', '', '', fmtHours(m.total.hours), fmtHours(m.total.overtime), fmtHours(m.total.night), fmtHours(m.total.nightOvertime)]
+      ['TOTAL', '', '', fmtHours(m.total.hours), fmtHours(m.total.overtime), fmtHours(m.total.offWorked), fmtHours(m.total.night), fmtHours(m.total.nightOvertime)]
     ]
     const ws = XLSX.utils.aoa_to_sheet(data)
-    ws['!cols'] = [{ wch: 12 }, { wch: 6 }, { wch: 16 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 9 }]
+    ws['!cols'] = [{ wch: 12 }, { wch: 6 }, { wch: 16 }, { wch: 8 }, { wch: 8 }, { wch: 9 }, { wch: 8 }, { wch: 9 }]
     XLSX.utils.book_append_sheet(wb, ws, m.sheet)
   }
   if (months.length === 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([HEAD]), 'Vide')
@@ -85,7 +89,7 @@ export async function exportPdf(shifts, monthKey) {
   const months = monthlyDetail(shifts)
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const W = 210
-  const X = [16, 46, 66, 108, 130, 152, 176]
+  const X = [14, 38, 56, 92, 110, 130, 154, 176]
 
   months.forEach((m, idx) => {
     if (idx > 0) doc.addPage()
@@ -119,8 +123,9 @@ export async function exportPdf(shifts, monthKey) {
     doc.text('TOTAL', X[0], y + 3)
     doc.text(fmtHours(m.total.hours), X[3], y + 3)
     doc.text(fmtHours(m.total.overtime), X[4], y + 3)
-    doc.text(fmtHours(m.total.night), X[5], y + 3)
-    doc.text(fmtHours(m.total.nightOvertime), X[6], y + 3)
+    doc.text(fmtHours(m.total.offWorked), X[5], y + 3)
+    doc.text(fmtHours(m.total.night), X[6], y + 3)
+    doc.text(fmtHours(m.total.nightOvertime), X[7], y + 3)
     doc.setFont(undefined, 'normal')
   })
 
