@@ -30,7 +30,6 @@ export async function saveMission(mission) {
 }
 
 export async function deleteMission(id) {
-  const local = await db.missions.get(id)
   if (navigator.onLine) {
     const { error } = await supabase.from('missions').delete().eq('id', id)
     if (error) {
@@ -41,9 +40,10 @@ export async function deleteMission(id) {
     await db.missions.delete(id)
     return
   }
-  // Hors ligne : si jamais synchronisée, on marque la suppression pour la propager au retour du réseau.
-  if (local?.syncStatus === 'synced') await db.missions.update(id, { syncStatus: 'pending-delete' })
-  else await db.missions.delete(id)
+  // Hors ligne : on marque toujours la suppression pour la propager au retour du réseau, même si
+  // la ligne locale est 'pending'/'error' (donc potentiellement déjà synchronisée avant une édition
+  // hors ligne) — un DELETE sur un id jamais synchronisé est un no-op côté serveur, donc sans risque.
+  await db.missions.update(id, { syncStatus: 'pending-delete' })
 }
 
 export async function flush() {
@@ -111,7 +111,6 @@ export async function saveShift(shift) {
 }
 
 export async function deleteShift(id) {
-  const local = await db.shifts.get(id)
   if (navigator.onLine) {
     const { error } = await supabase.from('work_shifts').delete().eq('id', id)
     if (error) {
@@ -122,8 +121,8 @@ export async function deleteShift(id) {
     await db.shifts.delete(id)
     return
   }
-  if (local?.syncStatus === 'synced') await db.shifts.update(id, { syncStatus: 'pending-delete' })
-  else await db.shifts.delete(id)
+  // Hors ligne : voir le commentaire équivalent dans deleteMission.
+  await db.shifts.update(id, { syncStatus: 'pending-delete' })
 }
 
 export async function flushShifts() {

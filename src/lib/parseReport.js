@@ -1,3 +1,5 @@
+import { todayLocal } from './date'
+
 const SAT_MAP = {
   EXCELLENTE: 'EXCELLENTE', EXCELLENT: 'EXCELLENTE',
   BONNE: 'BONNE', BON: 'BONNE',
@@ -18,7 +20,7 @@ function intVal(text, label) {
 
 function normDate(raw) {
   const m = raw.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/)
-  if (!m) return new Date().toISOString().slice(0, 10)
+  if (!m) return todayLocal()
   const [, d, mo, y] = m
   const year = y ? (y.length === 2 ? 2000 + +y : +y) : new Date().getFullYear()
   return `${year}-${String(+mo).padStart(2, '0')}-${String(+d).padStart(2, '0')}`
