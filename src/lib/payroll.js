@@ -42,6 +42,7 @@ export function computePayroll(shifts, hourlyRate, rates = DEFAULT_RATES) {
   return monthlyDetail(shifts).map(m => ({
     key: m.key,
     label: m.label,
+    rows: m.rows, // détail jour par jour, pour le relevé d'heures inclus dans les exports paie
     payroll: computeMonthPayroll(m, hourlyRate, rates)
   }))
 }

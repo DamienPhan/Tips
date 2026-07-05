@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { db } from './db'
+import { recompute } from './parseShift'
 
 const COLUMNS = [
   'id', 'intervention_date', 'booking_ref', 'client_name', 'greeter',
@@ -135,7 +136,16 @@ export async function flushShifts() {
       else await db.shifts.delete(s.id)
       continue
     }
-    const { error } = await supabase.from('work_shifts').upsert(toShiftPayload(s))
+    // Auto-réparation : une ligne legacy avec start_min/end_min manquant pouvait produire un
+    // hours=NaN, qui devient `null` en JSON et se fait rejeter par la contrainte NOT NULL de
+    // Postgres, bloquant la ligne en 'error' pour toujours (le flush ne fait que renvoyer ce qui
+    // est déjà en Dexie, sans recalcul). On recalcule ici avant l'envoi si hours n'est pas fini.
+    let payloadSource = s
+    if (!Number.isFinite(Number(s.hours))) {
+      payloadSource = { ...s, ...recompute(s, s.is_day_off) }
+      await db.shifts.update(s.id, recompute(s, s.is_day_off))
+    }
+    const { error } = await supabase.from('work_shifts').upsert(toShiftPayload(payloadSource))
     if (error) {
       console.error('Échec sync shift', s.shift_date, error.message)
       await db.shifts.update(s.id, { syncStatus: 'error', syncError: error.message })

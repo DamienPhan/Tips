@@ -1,8 +1,8 @@
 const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 
-// Regroupe des shifts par mois calendaire avec les totaux agrégés — utilisé par exportData.js
-// (exports Excel/PDF) et payroll.js (simulation de paie). Isolé dans son propre module (pur,
-// sans dépendance à xlsx/jspdf) pour ne pas forcer ces libs dans le bundle principal.
+// Regroupe des shifts par mois calendaire avec les totaux agrégés — utilisé par payroll.js
+// (simulation de paie, exports Excel/PDF). Isolé dans son propre module (pur, sans dépendance
+// à xlsx/jspdf) pour ne pas forcer ces libs dans le bundle principal.
 export function monthlyDetail(shifts) {
   const map = new Map()
   for (const s of shifts) {
