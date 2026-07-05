@@ -54,3 +54,7 @@ Requires `.env.local` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (see
 **Dispatch split** (`src/lib/dispatch.js`): `DISPATCH_RATE` (10%) is applied to compute the share owed back to dispatch vs. net kept. `lastMonthTips()` scopes this to the previous calendar month only (used by `Home.jsx`'s "Partage dispatch" section); `tipsByMonth()` is the older all-history-grouped-by-month variant, kept for now but currently unused by that section.
 
 **Only `App.jsx`'s import graph is live.** It renders `Auth`, `Home`, `Calendar`, `MissionsList`, `MissionForm`, `ImportModal` — that's the entire component tree. If you're exploring `src/components/`, don't assume a file is wired in just because it exists; verify it's reachable from `App.jsx` before treating its logic as current behavior. (Five stale/superseded components — `Charts.jsx`, `Stats.jsx`, `DayTotal.jsx`, `Shifts.jsx`, `ImportReport.jsx` — were removed for this reason; their functionality is already covered by `Home.jsx`, `Calendar.jsx`, and `ImportModal.jsx`.)
+
+## Review subagents
+
+Since there's no test suite, review is the only correctness gate before shipping. Two project subagents (`.claude/agents/`) exist for this — use `sync-invariant-reviewer` proactively after any change to `src/lib/sync.js`, `src/lib/db.js`, `src/store/missions.js`, or any `save*`/`delete*` function for missions/shifts (it checks the pending/error/pending-delete state machine and the "don't clobber locally-dirty rows on pull" rule); use `code-reviewer` for everything else.
