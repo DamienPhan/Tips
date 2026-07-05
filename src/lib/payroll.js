@@ -42,6 +42,7 @@ export function computePayroll(shifts, hourlyRate, rates = DEFAULT_RATES) {
   return monthlyDetail(shifts).map(m => ({
     key: m.key,
     label: m.label,
+    sheet: m.sheet, // nom d'onglet court ("Juil 2026"), pour l'export Excel
     rows: m.rows, // détail jour par jour, pour le relevé d'heures inclus dans les exports paie
     payroll: computeMonthPayroll(m, hourlyRate, rates)
   }))
@@ -49,11 +50,14 @@ export function computePayroll(shifts, hourlyRate, rates = DEFAULT_RATES) {
 
 // Lignes de catégorie communes à l'UI, l'export PDF et l'export Excel — une seule source
 // de vérité pour éviter que les trois recalculent chacun leur propre montant.
+// Libellés en toutes lettres plutôt qu'avec des symboles mathématiques (≤/>) : les polices de
+// base de jsPDF (WinAnsi/CP1252) n'ont pas le glyphe "≤", ce qui produisait du texte corrompu
+// dans le PDF exporté.
 export function payrollRows(p) {
   return [
     { label: 'Heures normales', hours: p.baseHours, amount: p.baseAmount },
-    { label: 'Heures sup (≤ 34h, +25%)', hours: p.overtimeLowHours, amount: p.overtimeLowAmount },
-    { label: 'Heures sup (> 34h, +50%)', hours: p.overtimeHighHours, amount: p.overtimeHighAmount },
+    { label: "Heures sup jusqu'à 34h (+25%)", hours: p.overtimeLowHours, amount: p.overtimeLowAmount },
+    { label: 'Heures sup au-delà de 34h (+50%)', hours: p.overtimeHighHours, amount: p.overtimeHighAmount },
     { label: 'Prime de nuit (+25%)', hours: p.nightHours, amount: p.nightBonus }
   ]
 }
