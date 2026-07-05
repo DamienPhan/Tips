@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Analytics } from '@vercel/analytics/react'
 import { supabase } from './lib/supabase'
 import { initSync } from './lib/sync'
 import { useMissions } from './store/missions'
@@ -50,6 +51,7 @@ export default function App() {
 
       {importing && <ImportModal onClose={() => setImporting(false)} onManual={() => { setImporting(false); setEditing({}) }} />}
       {editing !== null && <MissionForm initial={editing.id ? editing : undefined} onClose={() => setEditing(null)} />}
+      <Analytics />
     </div>
   )
 }
