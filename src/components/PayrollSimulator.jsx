@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useMissions } from '../store/missions'
 import { computePayroll, payrollRows } from '../lib/payroll'
 import { fmtHours } from '../lib/parseShift'
@@ -11,6 +11,13 @@ export default function PayrollSimulator() {
   const [hourlyRate, setHourlyRate] = useState(() => Number(localStorage.getItem(RATE_KEY)) || 12.5)
   const [monthKey, setMonthKey] = useState(() => new Date().toISOString().slice(0, 7))
   const [busy, setBusy] = useState(null)
+  const [error, setError] = useState(null)
+
+  // Précharge jsPDF/xlsx dès l'ouverture de l'onglet : sur Safari iOS / PWA installée, un
+  // téléchargement déclenché après un `await import(...)` réseau perd le "geste utilisateur"
+  // du clic et échoue silencieusement. En préchargeant ici, l'import est déjà en cache au
+  // moment du clic et le déclenchement du fichier reste dans la même activation.
+  useEffect(() => { import('jspdf'); import('xlsx') }, [])
 
   const results = useMemo(() => computePayroll(shifts, hourlyRate), [shifts, hourlyRate])
   const current = results.find(r => r.key === monthKey) || results[results.length - 1]
@@ -23,12 +30,13 @@ export default function PayrollSimulator() {
 
   const run = async (kind) => {
     setBusy(kind)
+    setError(null)
     try {
       if (kind === 'pdf') await exportPayrollPdf([current], hourlyRate)
       else await exportPayrollXlsx([current], hourlyRate)
     } catch (e) {
       console.error('Export paie échoué', e)
-      alert(`L'export a échoué : ${e.message || e}`)
+      setError(e.message || String(e))
     }
     setBusy(null)
   }
@@ -80,6 +88,7 @@ export default function PayrollSimulator() {
               {busy === 'pdf' ? '…' : 'PDF'}
             </button>
           </div>
+          {error && <p className="text-error text-xs mt-2">L'export a échoué : {error}</p>}
         </>
       )}
     </div>

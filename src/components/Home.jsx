@@ -183,7 +183,42 @@ export default function Home() {
       <DispatchSection missions={missions} revealed={revealed} onToggle={toggleRevealed} />
 
       <ExportSection shifts={shifts} />
+
+      <RepairStuckShiftsSection />
     </div>
+  )
+}
+
+// Bouton de réparation ponctuel : recalcule uniquement les shifts restés en syncStatus
+// 'pending'/'error' avec la formule workedMin() désormais défensive contre les NaN.
+// À retirer une fois que le nombre "en attente" affiché par SyncBar (App.jsx) est retombé à 0.
+function RepairStuckShiftsSection() {
+  const repairStuckShifts = useMissions(s => s.repairStuckShifts)
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(null)
+
+  const run = async () => {
+    setBusy(true)
+    try {
+      const n = await repairStuckShifts()
+      setDone(n)
+    } catch (e) {
+      console.error('Réparation échouée', e)
+      setDone(`erreur : ${e.message || e}`)
+    }
+    setBusy(false)
+  }
+
+  return (
+    <section className="bg-surface rounded-2xl p-4 mt-4">
+      <h3 className="font-medium text-sm mb-1">Réparation : shifts bloqués</h3>
+      <p className="text-muted text-xs mb-3">Recalcule et resynchronise les shifts restés « en attente » (compteur en haut de l'écran).</p>
+      <button onClick={run} disabled={busy}
+        className="w-full bg-surface-2 text-[#E6E9EF] rounded-xl py-3 text-sm font-medium active:bg-white/10 disabled:opacity-50">
+        {busy ? '…' : 'Réparer les shifts bloqués'}
+      </button>
+      {done != null && <p className="text-synced text-xs mt-2">{done} shift(s) traité(s).</p>}
+    </section>
   )
 }
 

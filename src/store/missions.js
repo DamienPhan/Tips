@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { todayLocal } from '../lib/date'
+import { recompute } from '../lib/parseShift'
 import {
   saveMission, deleteMission, loadAll, pullFromServer,
   saveShift, deleteShift, loadShifts, pullShifts
@@ -58,6 +59,19 @@ export const useMissions = create((set, get) => ({
   removeShift: async (id) => {
     await deleteShift(id)
     set({ shifts: get().shifts.filter(s => s.id !== id) })
+  },
+
+  // Répare ponctuellement les shifts restés bloqués en 'pending'/'error' (typiquement parce que
+  // start_min/end_min manquants sur une ligne legacy produisaient un hours=NaN → null, rejeté par
+  // la contrainte NOT NULL de Postgres). workedMin() est maintenant défensif (voir parseShift.js) ;
+  // ceci recalcule juste ces lignes précises avec la formule corrigée et les remet en synchro.
+  repairStuckShifts: async () => {
+    const stuck = get().shifts.filter(s => s.syncStatus === 'pending' || s.syncStatus === 'error')
+    for (const s of stuck) {
+      await saveShift({ ...s, ...recompute(s, s.is_day_off) })
+    }
+    set({ shifts: await loadShifts() })
+    return stuck.length
   },
 
   todayMissions: () => get().missions.filter(m => m.intervention_date === todayISO()),

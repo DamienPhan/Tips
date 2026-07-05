@@ -25,10 +25,14 @@ function toMinutes(h, m) {
 }
 
 // Minutes travaillées d'un shift (gère le passage minuit).
+// Coercition défensive : un shift legacy/corrompu avec start_min/end_min manquant (undefined)
+// donnait NaN ici, qui devient `null` en JSON envoyé à Supabase — rejeté par la contrainte
+// `hours numeric not null`, laissant la ligne bloquée en syncStatus 'error' indéfiniment.
 export function workedMin(shift) {
-  let end = shift.end_min
-  if (end < shift.start_min) end += 24 * 60
-  return end - shift.start_min
+  const start = Number(shift.start_min) || 0
+  let end = Number(shift.end_min) || 0
+  if (end < start) end += 24 * 60
+  return end - start
 }
 
 // Minutes supplémentaires réelles (temps effectivement travaillé) : tout le shift si OFF, sinon au-delà de 8h30.
@@ -48,8 +52,8 @@ export function overtimePayMin(workedMinutes, isDayOff) {
 // Les heures sup occupent les DERNIÈRES minutes réelles du shift (au-delà de 8h30, ou tout si OFF).
 export function nightBreakdown(shift, isDayOff) {
   const worked = workedMin(shift)
-  const from = shift.start_min
-  const to = shift.start_min + worked
+  const from = Number(shift.start_min) || 0
+  const to = from + worked
   const nightTotal = nightMinutesIn(from, to)
   const otMin = overtimeMin(worked, isDayOff)
   // les sup occupent la fin du shift : [to - otMin, to)
