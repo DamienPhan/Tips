@@ -41,7 +41,10 @@ create policy owner_all on missions
   with check (auth.uid() = user_id);
 
 -- Vue mensuelle (no-show exclu des ratios financiers).
-create or replace view monthly_stats as
+-- security_invoker : la vue applique les RLS de l'appelant plutôt que celles du propriétaire.
+create or replace view monthly_stats
+with (security_invoker = true)
+as
 select
   user_id,
   date_trunc('month', intervention_date)::date as month,
@@ -67,7 +70,8 @@ create table if not exists work_shifts (
   is_day_off boolean default false,
   night_hours numeric(5,2) default 0,
   night_overtime_hours numeric(5,2) default 0,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
 );
 
 create index if not exists shifts_user_date_idx on work_shifts (user_id, shift_date desc);
@@ -80,3 +84,4 @@ create policy owner_all_shifts on work_shifts
 
 -- Migration non destructive (si table déjà existante) :
 -- alter table work_shifts add column if not exists is_day_off boolean default false;
+-- alter table work_shifts add column if not exists updated_at timestamptz default now();

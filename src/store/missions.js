@@ -1,13 +1,8 @@
 import { create } from 'zustand'
-import { todayLocal } from '../lib/date'
 import {
   saveMission, deleteMission, loadAll, pullFromServer,
   saveShift, deleteShift, loadShifts, pullShifts
 } from '../lib/sync'
-
-function todayISO() {
-  return todayLocal()
-}
 
 export const useMissions = create((set, get) => ({
   missions: [],
@@ -58,11 +53,5 @@ export const useMissions = create((set, get) => ({
   removeShift: async (id) => {
     await deleteShift(id)
     set({ shifts: get().shifts.filter(s => s.id !== id) })
-  },
-
-  todayMissions: () => get().missions.filter(m => m.intervention_date === todayISO()),
-  todayTotal: () =>
-    get().missions
-      .filter(m => m.intervention_date === todayISO())
-      .reduce((s, m) => s + Number(m.tip_amount || 0), 0)
+  }
 }))

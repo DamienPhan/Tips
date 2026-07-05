@@ -26,16 +26,23 @@ export default function ImportModal({ onClose, onManual }) {
 
   const confirm = async () => {
     setSaving(true)
-    if (result.type === 'missions') {
-      await addMany(result.items)
-    } else if (result.type === 'shifts') {
-      const items = result.items.map((s, i) => {
-        const isOff = !!offFlags[i]
-        return { ...s, ...recompute(s, isOff) }
-      })
-      await addShifts(items)
+    try {
+      if (result.type === 'missions') {
+        await addMany(result.items)
+      } else if (result.type === 'shifts') {
+        const items = result.items.map((s, i) => {
+          const isOff = !!offFlags[i]
+          return { ...s, ...recompute(s, isOff) }
+        })
+        await addShifts(items)
+      }
+      onClose()
+    } catch (e) {
+      console.error('Import échoué', e)
+      alert(`L'enregistrement a échoué : ${e.message || e}`)
+    } finally {
+      setSaving(false)
     }
-    onClose()
   }
 
   return (

@@ -26,10 +26,16 @@ export default function MissionCard({ mission, onEdit }) {
     setEditingTip(false)
   }
 
+  const openMission = () => onEdit(mission)
+  const onKeyDown = e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openMission() }
+  }
+
   return (
-    <button
-      onClick={() => onEdit(mission)}
-      className="w-full text-left bg-surface rounded-2xl mb-2 active:bg-surface-2 transition-colors overflow-hidden flex"
+    <div
+      role="button" tabIndex={0}
+      onClick={openMission} onKeyDown={onKeyDown}
+      className="w-full text-left bg-surface rounded-2xl mb-2 active:bg-surface-2 transition-colors overflow-hidden flex cursor-pointer"
     >
       {/* Liseré couleur service */}
       <span className="w-1 shrink-0" style={{ background: svc.color }} />
@@ -80,6 +86,6 @@ export default function MissionCard({ mission, onEdit }) {
           </div>
         </div>
       </div>
-    </button>
+    </div>
   )
 }

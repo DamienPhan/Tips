@@ -5,16 +5,19 @@ import { revenueBars, serviceBreakdown, dailyAverage, barLabel } from '../lib/ch
 import { lastMonthTips, DISPATCH_RATE } from '../lib/dispatch'
 import { fmtHours } from '../lib/parseShift'
 import { parseLocal } from '../lib/date'
+import { eur, MONTHS } from '../lib/format'
 
 const PERIODS = [['week', 'Semaine'], ['month', 'Mois'], ['year', 'Année']]
 const SERVICE = [['ARR', 'Arrivée', '#E8B14C'], ['DEP', 'Départ', '#5DCAA5'], ['TRANSIT', 'Transit', '#7C8499']]
-const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
-
-function eur(n, dec = 2) { return Number(n || 0).toFixed(dec).replace('.', ',') }
 
 function Amt({ revealed, onToggle, blur = 6, className = '', children }) {
+  const activate = () => onToggle()
+  const onKeyDown = e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate() }
+  }
   return (
-    <span onClick={onToggle} className={`transition-[filter] duration-200 cursor-pointer ${revealed ? '' : 'select-none'} ${className}`}
+    <span onClick={activate} onKeyDown={onKeyDown} role="button" tabIndex={0}
+      className={`transition-[filter] duration-200 cursor-pointer ${revealed ? '' : 'select-none'} ${className}`}
       style={{ filter: revealed ? 'none' : `blur(${blur}px)` }}>
       {children}
     </span>
@@ -45,11 +48,16 @@ function periodLabel(period, d) {
 }
 
 function shiftRefDate(period, d, delta) {
-  const next = new Date(d)
-  if (period === 'year') next.setFullYear(next.getFullYear() + delta)
-  else if (period === 'month') next.setMonth(next.getMonth() + delta)
-  else next.setDate(next.getDate() + delta * 7)
-  return next
+  if (period === 'week') {
+    const next = new Date(d)
+    next.setDate(next.getDate() + delta * 7)
+    return next
+  }
+  const day = d.getDate()
+  const year = d.getFullYear() + (period === 'year' ? delta : 0)
+  const month = d.getMonth() + (period === 'month' ? delta : 0)
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  return new Date(year, month, Math.min(day, daysInMonth))
 }
 
 export default function Home() {
@@ -80,7 +88,7 @@ export default function Home() {
     <div className="px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-36">
       <div className="flex gap-1 mb-5 bg-surface rounded-xl p-1">
         {PERIODS.map(([k, lbl]) => (
-          <button key={k} onClick={() => changePeriod(k)}
+          <button key={k} onClick={() => changePeriod(k)} aria-current={period === k ? 'true' : undefined}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${period === k ? 'bg-amber text-night' : 'text-muted'}`}>
             {lbl}
           </button>
@@ -187,7 +195,6 @@ export default function Home() {
 
 function DispatchSection({ missions, revealed, onToggle }) {
   const r = lastMonthTips(missions)
-  const eur = n => Number(n || 0).toFixed(2).replace('.', ',')
   return (
     <section className="bg-surface rounded-2xl p-4 mt-4">
       <h3 className="font-medium text-sm mb-1">Partage dispatch</h3>
@@ -240,8 +247,13 @@ function BarChart({ bars, period, sel, onSel, revealed }) {
         const x = i * (bw + gap)
         const y = H - PB - bh
         const active = sel === i
+        const toggle = () => onSel(active ? null : i)
+        const onKeyDown = e => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle() }
+        }
         return (
-          <g key={b.key} onClick={() => onSel(active ? null : i)} style={{ cursor: 'pointer' }}>
+          <g key={b.key} onClick={toggle} onKeyDown={onKeyDown} role="button" tabIndex={0}
+            aria-label={barLabel(b.key, period)} style={{ cursor: 'pointer' }}>
             <rect x={x} y={0} width={bw} height={H - PB} fill="transparent" />
             <rect x={x} y={y} width={bw} height={Math.max(bh, 1)} rx="3"
               fill={active ? '#E8B14C' : 'rgba(232,177,76,0.55)'} />

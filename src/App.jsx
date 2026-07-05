@@ -21,6 +21,7 @@ export default function App() {
   const missions = useMissions(s => s.missions)
   const shifts = useMissions(s => s.shifts)
   const init = useMissions(s => s.init)
+  const loading = useMissions(s => s.loading)
   const { online, pending } = useSyncStatus(missions, shifts)
 
   useEffect(() => {
@@ -33,6 +34,7 @@ export default function App() {
 
   if (!ready) return <div className="min-h-full" />
   if (!session) return <Auth />
+  if (loading) return <div className="min-h-full" />
 
   return (
     <div className="mx-auto max-w-[480px] min-h-full">
@@ -79,7 +81,8 @@ function TabBar({ tab, setTab }) {
   return (
     <nav className="fixed bottom-0 inset-x-0 z-20 mx-auto max-w-[480px] bg-night/90 backdrop-blur-md border-t border-white/[0.06] flex pb-[max(0.25rem,env(safe-area-inset-bottom))]">
       {items.map(([k, lbl]) => (
-        <button key={k} onClick={() => setTab(k)} className={`flex-1 py-3.5 text-sm font-medium transition-colors ${tab === k ? 'text-amber' : 'text-muted'}`}>
+        <button key={k} onClick={() => setTab(k)} aria-current={tab === k ? 'page' : undefined}
+          className={`flex-1 py-3.5 text-sm font-medium transition-colors ${tab === k ? 'text-amber' : 'text-muted'}`}>
           {lbl}
         </button>
       ))}
