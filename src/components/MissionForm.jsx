@@ -32,9 +32,14 @@ export default function MissionForm({ initial, onClose }) {
       porter_count: Number(f.porter_count) || 1,
       tip_amount: Number(String(f.tip_amount).replace(',', '.')) || 0
     }
-    if (initial?.id) await update({ ...initial, ...payload })
-    else await add(payload)
-    onClose()
+    try {
+      if (initial?.id) await update({ ...initial, ...payload })
+      else await add(payload)
+      onClose()
+    } catch (e) {
+      console.error('Enregistrement échoué', e)
+      alert(`L'enregistrement a échoué : ${e.message || e}`)
+    }
   }
 
   return (
@@ -47,9 +52,9 @@ export default function MissionForm({ initial, onClose }) {
 
       <div className="p-5 space-y-4 pb-[max(2rem,env(safe-area-inset-bottom))]">
         <div>
-          <label className={label}>Pourboire</label>
+          <label htmlFor="mf-tip" className={label}>Pourboire</label>
           <div className="relative">
-            <input inputMode="decimal" type="text" value={f.tip_amount}
+            <input id="mf-tip" inputMode="decimal" type="text" value={f.tip_amount}
               onChange={e => set('tip_amount', e.target.value)} placeholder="0,00"
               className={`${field} tnum font-display text-3xl text-amber pr-10`} />
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-amber/60 text-xl">€</span>
@@ -58,30 +63,30 @@ export default function MissionForm({ initial, onClose }) {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={label}>Date</label>
-            <input type="date" value={f.intervention_date} onChange={e => set('intervention_date', e.target.value)} className={field} />
+            <label htmlFor="mf-date" className={label}>Date</label>
+            <input id="mf-date" type="date" value={f.intervention_date} onChange={e => set('intervention_date', e.target.value)} className={field} />
           </div>
           <div>
-            <label className={label}>Type</label>
-            <select value={f.service_type} onChange={e => set('service_type', e.target.value)} className={field}>
+            <label htmlFor="mf-service" className={label}>Type</label>
+            <select id="mf-service" value={f.service_type} onChange={e => set('service_type', e.target.value)} className={field}>
               <option value="ARR">Arrivée</option><option value="DEP">Départ</option><option value="TRANSIT">Transit</option>
             </select>
           </div>
         </div>
 
         <div>
-          <label className={label}>Client</label>
-          <input type="text" value={f.client_name} onChange={e => set('client_name', e.target.value)} placeholder="Nom du client" className={field} />
+          <label htmlFor="mf-client" className={label}>Client</label>
+          <input id="mf-client" type="text" value={f.client_name} onChange={e => set('client_name', e.target.value)} placeholder="Nom du client" className={field} />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={label}>Greeteur</label>
-            <input type="text" value={f.greeter} onChange={e => set('greeter', e.target.value)} placeholder="Nom" className={field} />
+            <label htmlFor="mf-greeter" className={label}>Greeteur</label>
+            <input id="mf-greeter" type="text" value={f.greeter} onChange={e => set('greeter', e.target.value)} placeholder="Nom" className={field} />
           </div>
           <div>
-            <label className={label}>Booking</label>
-            <select value={f.booking_mode} onChange={e => set('booking_mode', e.target.value)} className={field}>
+            <label htmlFor="mf-booking-mode" className={label}>Booking</label>
+            <select id="mf-booking-mode" value={f.booking_mode} onChange={e => set('booking_mode', e.target.value)} className={field}>
               <option value="PRE">Pré-booking</option><option value="LIVE">Live</option>
             </select>
           </div>
@@ -89,54 +94,54 @@ export default function MissionForm({ initial, onClose }) {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={label}>Réf. réservation</label>
-            <input type="text" value={f.booking_ref} onChange={e => set('booking_ref', e.target.value)} placeholder="Booking #" className={field} />
+            <label htmlFor="mf-booking-ref" className={label}>Réf. réservation</label>
+            <input id="mf-booking-ref" type="text" value={f.booking_ref} onChange={e => set('booking_ref', e.target.value)} placeholder="Booking #" className={field} />
           </div>
           <div>
-            <label className={label}>Vol (IATA)</label>
-            <input type="text" value={f.flight_code} onChange={e => set('flight_code', e.target.value.toUpperCase())} placeholder="EK0077" className={field} />
+            <label htmlFor="mf-flight" className={label}>Vol (IATA)</label>
+            <input id="mf-flight" type="text" value={f.flight_code} onChange={e => set('flight_code', e.target.value.toUpperCase())} placeholder="EK0077" className={field} />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={label}>Terminal</label>
-            <input inputMode="numeric" type="text" value={f.terminal} onChange={e => set('terminal', e.target.value)} placeholder="2" className={field} />
+            <label htmlFor="mf-terminal" className={label}>Terminal</label>
+            <input id="mf-terminal" inputMode="numeric" type="text" value={f.terminal} onChange={e => set('terminal', e.target.value)} placeholder="2" className={field} />
           </div>
           <div>
-            <label className={label}>Passagers</label>
-            <input inputMode="numeric" type="text" value={f.pax_count} onChange={e => set('pax_count', e.target.value.replace(/\D/g, ''))} className={`${field} tnum`} />
+            <label htmlFor="mf-pax" className={label}>Passagers</label>
+            <input id="mf-pax" inputMode="numeric" type="text" value={f.pax_count} onChange={e => set('pax_count', e.target.value.replace(/\D/g, ''))} className={`${field} tnum`} />
           </div>
         </div>
 
         <div className="grid grid-cols-3 gap-3">
           {[['bags_standard', 'Bagages'], ['bags_oversized', 'Hors format'], ['animal_crates', 'Cages']].map(([k, lbl]) => (
             <div key={k}>
-              <label className={label}>{lbl}</label>
-              <input inputMode="numeric" type="text" value={f[k]} onChange={e => set(k, e.target.value.replace(/\D/g, ''))} className={`${field} tnum`} />
+              <label htmlFor={`mf-${k}`} className={label}>{lbl}</label>
+              <input id={`mf-${k}`} inputMode="numeric" type="text" value={f[k]} onChange={e => set(k, e.target.value.replace(/\D/g, ''))} className={`${field} tnum`} />
             </div>
           ))}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={label}>Lieu rencontre</label>
-            <input type="text" value={f.meeting_point} onChange={e => set('meeting_point', e.target.value)} placeholder="Tapis bagage" className={field} />
+            <label htmlFor="mf-meeting" className={label}>Lieu rencontre</label>
+            <input id="mf-meeting" type="text" value={f.meeting_point} onChange={e => set('meeting_point', e.target.value)} placeholder="Tapis bagage" className={field} />
           </div>
           <div>
-            <label className={label}>Lieu dépose</label>
-            <input type="text" value={f.drop_point} onChange={e => set('drop_point', e.target.value)} placeholder="Parking pro" className={field} />
+            <label htmlFor="mf-drop" className={label}>Lieu dépose</label>
+            <input id="mf-drop" type="text" value={f.drop_point} onChange={e => set('drop_point', e.target.value)} placeholder="Parking pro" className={field} />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <button onClick={() => set('tax_refund', !f.tax_refund)}
+          <button onClick={() => set('tax_refund', !f.tax_refund)} aria-pressed={f.tax_refund}
             className={`py-3 rounded-xl text-sm ${f.tax_refund ? 'bg-amber/15 text-amber' : 'bg-surface-2 text-muted'}`}>
             Détaxe : {f.tax_refund ? 'Oui' : 'Non'}
           </button>
           <div>
-            <label className={label}>Porteurs</label>
-            <input inputMode="numeric" type="text" value={f.porter_count} onChange={e => set('porter_count', e.target.value.replace(/\D/g, ''))} className={`${field} tnum`} />
+            <label htmlFor="mf-porters" className={label}>Porteurs</label>
+            <input id="mf-porters" inputMode="numeric" type="text" value={f.porter_count} onChange={e => set('porter_count', e.target.value.replace(/\D/g, ''))} className={`${field} tnum`} />
           </div>
         </div>
 
@@ -144,7 +149,7 @@ export default function MissionForm({ initial, onClose }) {
           <label className={label}>Satisfaction</label>
           <div className="grid grid-cols-2 gap-2">
             {SAT.map(([v, lbl]) => (
-              <button key={v} onClick={() => set('satisfaction', v)}
+              <button key={v} onClick={() => set('satisfaction', v)} aria-pressed={f.satisfaction === v}
                 className={`py-2.5 rounded-xl text-sm ${f.satisfaction === v ? 'bg-amber text-night font-medium' : 'bg-surface-2 text-muted'}`}>
                 {lbl}
               </button>
@@ -153,14 +158,14 @@ export default function MissionForm({ initial, onClose }) {
         </div>
 
         <div>
-          <button onClick={() => set('is_no_show', !f.is_no_show)}
+          <button onClick={() => set('is_no_show', !f.is_no_show)} aria-pressed={f.is_no_show}
             className={`w-full py-3 rounded-xl text-sm ${f.is_no_show ? 'bg-error/15 text-error' : 'bg-surface-2 text-muted'}`}>
             {f.is_no_show ? 'NO SHOW — client absent' : 'Client présent'}
           </button>
         </div>
 
         <div>
-          <button onClick={() => set('has_issue', !f.has_issue)}
+          <button onClick={() => set('has_issue', !f.has_issue)} aria-pressed={f.has_issue}
             className={`w-full py-3 rounded-xl text-sm ${f.has_issue ? 'bg-error/15 text-error' : 'bg-surface-2 text-muted'}`}>
             {f.has_issue ? '⚠ Problème signalé' : 'Aucun problème'}
           </button>
@@ -172,7 +177,7 @@ export default function MissionForm({ initial, onClose }) {
 
         {initial?.id && (
           <button
-            onClick={() => { if (confirm('Supprimer cette mission ?')) { remove(initial.id); onClose() } }}
+            onClick={async () => { if (confirm('Supprimer cette mission ?')) { await remove(initial.id); onClose() } }}
             className="w-full py-3 rounded-xl text-sm text-error active:bg-error/10">
             Supprimer la mission
           </button>

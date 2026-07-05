@@ -1,9 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useMissions } from '../store/missions'
 import { todayLocal, parseLocal } from '../lib/date'
+import { eur } from '../lib/format'
 import MissionCard from './MissionCard'
-
-function eur(n) { return Number(n || 0).toFixed(2).replace('.', ',') }
 
 export default function MissionsList({ onEdit }) {
   const missions = useMissions(s => s.missions)
@@ -40,7 +39,7 @@ export default function MissionsList({ onEdit }) {
         />
         <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">⌕</span>
         {query && (
-          <button onClick={() => setQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted text-sm">✕</button>
+          <button onClick={() => setQuery('')} aria-label="Effacer la recherche" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted text-sm">✕</button>
         )}
       </div>
 

@@ -2,12 +2,11 @@ import { useState } from 'react'
 import { useMissions } from '../store/missions'
 import { fmtHours, fmtMinutes, recompute, workedMin, overtimePayMin, isRestDay } from '../lib/parseShift'
 import { parseLocal } from '../lib/date'
+import { eur, MONTHS } from '../lib/format'
 
 const DOW = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
-const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 
 function ymd(y, m, d) { return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}` }
-function eur(n, dec = 2) { return Number(n || 0).toFixed(dec).replace('.', ',') }
 
 function parseTime(str) {
   const s = String(str).trim().replace(/\s/g, '')
@@ -188,17 +187,17 @@ export default function Calendar() {
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-muted text-xs uppercase tracking-wider mb-1.5 block">Début</label>
-                  <input inputMode="numeric" value={startStr} onChange={e => setStartStr(e.target.value)} placeholder="7h"
+                  <label htmlFor="shift-start" className="text-muted text-xs uppercase tracking-wider mb-1.5 block">Début</label>
+                  <input id="shift-start" inputMode="numeric" value={startStr} onChange={e => setStartStr(e.target.value)} placeholder="7h"
                     className="w-full bg-surface-2 rounded-xl px-3.5 py-3 text-base outline-none focus:ring-2 focus:ring-amber/40" />
                 </div>
                 <div>
-                  <label className="text-muted text-xs uppercase tracking-wider mb-1.5 block">Fin</label>
-                  <input inputMode="numeric" value={endStr} onChange={e => setEndStr(e.target.value)} placeholder="15h30"
+                  <label htmlFor="shift-end" className="text-muted text-xs uppercase tracking-wider mb-1.5 block">Fin</label>
+                  <input id="shift-end" inputMode="numeric" value={endStr} onChange={e => setEndStr(e.target.value)} placeholder="15h30"
                     className="w-full bg-surface-2 rounded-xl px-3.5 py-3 text-base outline-none focus:ring-2 focus:ring-amber/40" />
                 </div>
               </div>
-              <button onClick={() => setEditOff(!editOff)}
+              <button onClick={() => setEditOff(!editOff)} aria-pressed={editOff}
                 className={`w-full py-3 rounded-xl text-sm font-medium ${editOff ? 'bg-error/15 text-error' : 'bg-surface-2 text-muted'}`}>
                 {editOff ? '✓ Jour OFF travaillé (payé double)' : 'Jour normal'}
               </button>
@@ -243,7 +242,7 @@ export default function Calendar() {
                 </div>
               )}
 
-              <button onClick={toggleOff}
+              <button onClick={toggleOff} aria-pressed={selShift.is_day_off}
                 className={`w-full py-3.5 rounded-xl text-sm font-medium mt-2 ${selShift.is_day_off ? 'bg-error text-night' : 'bg-surface-2 text-[#E6E9EF]'}`}>
                 {selShift.is_day_off ? '✓ Jour OFF travaillé' : 'Marquer ce jour comme OFF travaillé'}
               </button>
