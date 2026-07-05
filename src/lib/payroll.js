@@ -1,4 +1,4 @@
-import { monthlyDetail } from './exportData'
+import { monthlyDetail } from './monthlyDetail'
 
 export const DEFAULT_RATES = {
   overtimeThresholdHours: 34,  // au-delà de 34h de sup cumulées dans le mois, majoration 50%
@@ -21,18 +21,17 @@ export function computeMonthPayroll(month, hourlyRate, rates = DEFAULT_RATES) {
   const combinedOvertimeHours = total.overtime + offWorkedHours
   const overtimeLowHours = Math.min(combinedOvertimeHours, rates.overtimeThresholdHours)
   const overtimeHighHours = Math.max(0, combinedOvertimeHours - rates.overtimeThresholdHours)
-  const overtimeAmount =
-    overtimeLowHours * hourlyRate * rates.overtimeMultiplierLow +
-    overtimeHighHours * hourlyRate * rates.overtimeMultiplierHigh
+  const overtimeLowAmount = overtimeLowHours * hourlyRate * rates.overtimeMultiplierLow
+  const overtimeHighAmount = overtimeHighHours * hourlyRate * rates.overtimeMultiplierHigh
 
   const nightBonus = total.night * hourlyRate * rates.nightBonusRate
 
-  const grossTotal = baseAmount + overtimeAmount + nightBonus
+  const grossTotal = baseAmount + overtimeLowAmount + overtimeHighAmount + nightBonus
 
   return {
     baseHours, baseAmount,
     offWorkedHours, // informatif : déjà inclus dans overtimeLowHours/overtimeHighHours
-    overtimeLowHours, overtimeHighHours, overtimeAmount,
+    overtimeLowHours, overtimeHighHours, overtimeLowAmount, overtimeHighAmount,
     nightHours: total.night, nightBonus,
     grossTotal
   }
@@ -45,4 +44,15 @@ export function computePayroll(shifts, hourlyRate, rates = DEFAULT_RATES) {
     label: m.label,
     payroll: computeMonthPayroll(m, hourlyRate, rates)
   }))
+}
+
+// Lignes de catégorie communes à l'UI, l'export PDF et l'export Excel — une seule source
+// de vérité pour éviter que les trois recalculent chacun leur propre montant.
+export function payrollRows(p) {
+  return [
+    { label: 'Heures normales', hours: p.baseHours, amount: p.baseAmount },
+    { label: 'Heures sup (≤ 34h, +25%)', hours: p.overtimeLowHours, amount: p.overtimeLowAmount },
+    { label: 'Heures sup (> 34h, +50%)', hours: p.overtimeHighHours, amount: p.overtimeHighAmount },
+    { label: 'Prime de nuit (+25%)', hours: p.nightHours, amount: p.nightBonus }
+  ]
 }

@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useMissions } from '../store/missions'
-import { computePayroll } from '../lib/payroll'
-import { exportPayrollPdf } from '../lib/exportPayrollPdf'
+import { computePayroll, payrollRows } from '../lib/payroll'
+import { fmtHours } from '../lib/parseShift'
+import { exportPayrollPdf, exportPayrollXlsx } from '../lib/exportPayroll'
 
 const RATE_KEY = 'payroll:hourlyRate'
 
@@ -9,6 +10,7 @@ export default function PayrollSimulator() {
   const shifts = useMissions(s => s.shifts)
   const [hourlyRate, setHourlyRate] = useState(() => Number(localStorage.getItem(RATE_KEY)) || 12.5)
   const [monthKey, setMonthKey] = useState(() => new Date().toISOString().slice(0, 7))
+  const [busy, setBusy] = useState(null)
 
   const results = useMemo(() => computePayroll(shifts, hourlyRate), [shifts, hourlyRate])
   const current = results.find(r => r.key === monthKey) || results[results.length - 1]
@@ -19,57 +21,77 @@ export default function PayrollSimulator() {
     localStorage.setItem(RATE_KEY, String(n))
   }
 
-  if (!current) return <p className="text-muted p-4">Aucune donnée d'heures disponible.</p>
-
-  const p = current.payroll
+  const run = async (kind) => {
+    setBusy(kind)
+    try {
+      if (kind === 'pdf') await exportPayrollPdf([current], hourlyRate)
+      else await exportPayrollXlsx([current], hourlyRate)
+    } catch (e) {
+      console.error('Export paie échoué', e)
+      alert(`L'export a échoué : ${e.message || e}`)
+    }
+    setBusy(null)
+  }
 
   return (
-    <div className="p-4 space-y-4">
-      <div className="flex items-center gap-3">
-        <label className="text-sm">Taux horaire (€/h)</label>
-        <input
-          type="number" step="0.01" min="0" value={hourlyRate}
+    <div className="px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-36">
+      <h2 className="text-lg font-semibold mb-4">Simulation de paie</h2>
+
+      <section className="bg-surface rounded-2xl p-4 mb-4">
+        <label className="text-muted text-xs uppercase tracking-wider mb-1.5 block">Taux horaire (€/h)</label>
+        <input inputMode="decimal" type="number" step="0.01" min="0" value={hourlyRate}
           onChange={e => updateRate(e.target.value)}
-          className="w-24 rounded border px-2 py-1"
-        />
-        <select value={monthKey} onChange={e => setMonthKey(e.target.value)} className="rounded border px-2 py-1">
+          className="w-full bg-surface-2 rounded-xl px-3.5 py-3 text-base outline-none focus:ring-2 focus:ring-amber/40 mb-3" />
+
+        <label className="text-muted text-xs uppercase tracking-wider mb-1.5 block">Mois</label>
+        <select value={monthKey} onChange={e => setMonthKey(e.target.value)}
+          className="w-full bg-surface-2 rounded-xl px-3.5 py-3 text-base outline-none focus:ring-2 focus:ring-amber/40">
+          {results.length === 0 && <option value={monthKey}>Aucune donnée</option>}
           {results.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
         </select>
-      </div>
+      </section>
 
-      <div className="rounded-lg border divide-y">
-        <Row label="Heures normales" hours={p.baseHours} amount={p.baseAmount} />
-        <Row label="Heures sup (≤ 34h, +25%)" hours={p.overtimeLowHours} amount={p.overtimeLowHours * hourlyRate * 1.25} />
-        <Row label="Heures sup (> 34h, +50%)" hours={p.overtimeHighHours} amount={p.overtimeHighHours * hourlyRate * 1.5} />
-        {p.offWorkedHours > 0 && (
-          <div className="flex justify-between p-3 text-xs text-muted">
-            <span>dont jours OFF travaillés</span>
-            <span>{p.offWorkedHours.toFixed(2)} h (incluses ci-dessus)</span>
+      {!current ? (
+        <p className="text-muted text-sm text-center py-8">Aucune donnée d'heures disponible.</p>
+      ) : (
+        <>
+          <section className="bg-surface rounded-2xl p-4 mb-4 divide-y divide-white/5">
+            {payrollRows(current.payroll).map(r => <Row key={r.label} label={r.label} hours={r.hours} amount={r.amount} />)}
+            {current.payroll.offWorkedHours > 0 && (
+              <p className="text-muted text-xs pt-3">
+                dont {fmtHours(current.payroll.offWorkedHours)} de jours OFF travaillés, incluses dans les heures sup ci-dessus
+              </p>
+            )}
+            <div className="flex items-baseline justify-between pt-3">
+              <span className="font-medium text-sm">Total brut estimé</span>
+              <span className="tnum font-display font-bold text-amber text-xl">{current.payroll.grossTotal.toFixed(2)} €</span>
+            </div>
+          </section>
+
+          <p className="text-muted text-xs mb-3">Simulation indicative — hors charges sociales et prélèvement à la source.</p>
+
+          <div className="flex gap-2">
+            <button onClick={() => run('xlsx')} disabled={busy}
+              className="flex-1 bg-surface-2 text-[#E6E9EF] rounded-xl py-3 text-sm font-medium active:bg-white/10 disabled:opacity-50">
+              {busy === 'xlsx' ? '…' : 'Excel'}
+            </button>
+            <button onClick={() => run('pdf')} disabled={busy}
+              className="flex-1 bg-surface-2 text-[#E6E9EF] rounded-xl py-3 text-sm font-medium active:bg-white/10 disabled:opacity-50">
+              {busy === 'pdf' ? '…' : 'PDF'}
+            </button>
           </div>
-        )}
-        <Row label="Prime de nuit (+25%)" hours={p.nightHours} amount={p.nightBonus} />
-        <div className="flex justify-between p-3 font-bold text-lg">
-          <span>Total brut estimé</span>
-          <span>{p.grossTotal.toFixed(2)} €</span>
-        </div>
-      </div>
-
-      <button
-        onClick={() => exportPayrollPdf([current], hourlyRate)}
-        className="w-full rounded-lg bg-primary text-white py-2"
-      >
-        Exporter en PDF
-      </button>
+        </>
+      )}
     </div>
   )
 }
 
 function Row({ label, hours, amount }) {
   return (
-    <div className="flex justify-between p-3 text-sm">
-      <span>{label}</span>
-      <span className="text-muted">{hours.toFixed(2)} h</span>
-      <span className="font-medium">{amount.toFixed(2)} €</span>
+    <div className="flex items-center justify-between py-3 text-sm first:pt-0">
+      <span className="text-[#E6E9EF]">{label}</span>
+      <span className="tnum text-muted mx-3">{fmtHours(hours)}</span>
+      <span className="tnum font-medium">{amount.toFixed(2)} €</span>
     </div>
   )
 }

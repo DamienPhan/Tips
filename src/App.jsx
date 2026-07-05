@@ -9,6 +9,7 @@ import Calendar from './components/Calendar'
 import MissionsList from './components/MissionsList'
 import MissionForm from './components/MissionForm'
 import ImportModal from './components/ImportModal'
+import PayrollSimulator from './components/PayrollSimulator'
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -39,6 +40,7 @@ export default function App() {
       {tab === 'home' && <Home />}
       {tab === 'calendar' && <Calendar />}
       {tab === 'missions' && <MissionsList onEdit={setEditing} />}
+      {tab === 'paie' && <PayrollSimulator />}
 
       <div className="fixed inset-x-0 z-30 mx-auto max-w-[480px] px-5 bottom-[calc(3.75rem+max(0.5rem,env(safe-area-inset-bottom)))] flex justify-end pointer-events-none">
         <button onClick={() => setImporting(true)}
@@ -71,7 +73,7 @@ function SyncBar({ online, pending }) {
 }
 
 function TabBar({ tab, setTab }) {
-  const items = [['home', 'Accueil'], ['calendar', 'Calendrier'], ['missions', 'Missions']]
+  const items = [['home', 'Accueil'], ['calendar', 'Calendrier'], ['missions', 'Missions'], ['paie', 'Paie']]
   return (
     <nav className="fixed bottom-0 inset-x-0 z-20 mx-auto max-w-[480px] bg-night/90 backdrop-blur-md border-t border-white/[0.06] flex pb-[max(0.25rem,env(safe-area-inset-bottom))]">
       {items.map(([k, lbl]) => (
