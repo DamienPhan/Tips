@@ -183,7 +183,43 @@ export default function Home() {
       <DispatchSection missions={missions} revealed={revealed} onToggle={toggleRevealed} />
 
       <ExportSection shifts={shifts} />
+
+      <RecomputeShiftsSection />
     </div>
+  )
+}
+
+// Bouton de migration ponctuel : recalcule tous les shifts existants avec la formule
+// courante de overtime_hours/night_overtime_hours (plus de x2/+25% baked-in sur OFF travaillé).
+// À retirer une fois la migration effectuée.
+function RecomputeShiftsSection() {
+  const recomputeAllShifts = useMissions(s => s.recomputeAllShifts)
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(null)
+
+  const run = async () => {
+    if (!confirm('Recalculer les heures de tous les shifts enregistrés avec la formule actuelle ?')) return
+    setBusy(true)
+    try {
+      const n = await recomputeAllShifts()
+      setDone(n)
+    } catch (e) {
+      console.error('Recalcul échoué', e)
+      alert(`Le recalcul a échoué : ${e.message || e}`)
+    }
+    setBusy(false)
+  }
+
+  return (
+    <section className="bg-surface rounded-2xl p-4 mt-4">
+      <h3 className="font-medium text-sm mb-1">Migration : recalcul des heures</h3>
+      <p className="text-muted text-xs mb-3">Recalcule hours/overtime_hours/night_hours/night_overtime_hours de tous les shifts avec la formule actuelle, puis les resynchronise.</p>
+      <button onClick={run} disabled={busy}
+        className="w-full bg-surface-2 text-[#E6E9EF] rounded-xl py-3 text-sm font-medium active:bg-white/10 disabled:opacity-50">
+        {busy ? '…' : 'Recalculer tous les shifts'}
+      </button>
+      {done != null && <p className="text-synced text-xs mt-2">{done} shift(s) recalculé(s).</p>}
+    </section>
   )
 }
 

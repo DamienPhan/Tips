@@ -200,7 +200,7 @@ export default function Calendar() {
               </div>
               <button onClick={() => setEditOff(!editOff)}
                 className={`w-full py-3 rounded-xl text-sm font-medium ${editOff ? 'bg-error/15 text-error' : 'bg-surface-2 text-muted'}`}>
-                {editOff ? '✓ Jour OFF travaillé (payé double)' : 'Jour normal'}
+                {editOff ? '✓ Jour OFF travaillé (compté comme heures sup)' : 'Jour normal'}
               </button>
               {preview && (
                 <div className="flex justify-between text-sm bg-night rounded-xl px-3 py-2.5">
@@ -239,7 +239,7 @@ export default function Calendar() {
 
               {selShift.is_day_off && (
                 <div className="bg-error/10 rounded-xl px-3 py-2.5 mt-2 mb-1">
-                  <p className="text-error text-xs">Jour OFF travaillé : payé double, soit {fmtHours(selShift.hours)} travaillées comptées pour {fmtHours(selShift.overtime_hours)} d'heures travaillées (OFF) — une catégorie à part des heures sup normales.</p>
+                  <p className="text-error text-xs">Jour OFF travaillé : {fmtHours(selShift.hours)} travaillées comptées intégralement comme des heures sup — majorées selon le même barème mensuel que les heures sup normales.</p>
                 </div>
               )}
 

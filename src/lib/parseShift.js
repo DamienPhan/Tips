@@ -37,17 +37,15 @@ export function overtimeMin(workedMinutes, isDayOff) {
   return Math.max(0, workedMinutes - BASE_SHIFT_MIN)
 }
 
-// Majoration de paie : un jour OFF travaillé est payé double.
-function payMultiplier(isDayOff) { return isDayOff ? 2 : 1 }
-
-// Minutes supplémentaires "payées" (après majoration jour OFF = double).
+// Minutes supplémentaires "payées" : un jour OFF travaillé n'a plus de majoration propre ici —
+// ses heures (déjà comptées en intégralité par overtimeMin) sont ensuite traitées comme des
+// heures sup normales, majorées uniquement au niveau de la paie mensuelle (voir payroll.js).
 export function overtimePayMin(workedMinutes, isDayOff) {
-  return overtimeMin(workedMinutes, isDayOff) * payMultiplier(isDayOff)
+  return overtimeMin(workedMinutes, isDayOff)
 }
 
-// Minutes de nuit (22h-7h) d'un shift, et part de nuit dans les heures sup payées.
-// Les heures sup occupent les DERNIÈRES minutes réelles du shift (au-delà de 8h30, ou tout si OFF),
-// et sont ensuite majorées (double) si jour OFF.
+// Minutes de nuit (22h-7h) d'un shift, et part de nuit dans les heures sup.
+// Les heures sup occupent les DERNIÈRES minutes réelles du shift (au-delà de 8h30, ou tout si OFF).
 export function nightBreakdown(shift, isDayOff) {
   const worked = workedMin(shift)
   const from = shift.start_min
@@ -56,7 +54,7 @@ export function nightBreakdown(shift, isDayOff) {
   const otMin = overtimeMin(worked, isDayOff)
   // les sup occupent la fin du shift : [to - otMin, to)
   const nightOt = otMin > 0 ? nightMinutesIn(to - otMin, to) : 0
-  return { night_hours: nightTotal / 60, night_overtime_hours: (nightOt * payMultiplier(isDayOff)) / 60 }
+  return { night_hours: nightTotal / 60, night_overtime_hours: nightOt / 60 }
 }
 
 export function parseShifts(text) {
@@ -98,7 +96,7 @@ export function recompute(shift, isDayOff) {
   }
 }
 
-// Jour OFF non travaillé (is_day_off sans aucune heure), par opposition à un jour OFF travaillé (payé double).
+// Jour OFF non travaillé (is_day_off sans aucune heure), par opposition à un jour OFF travaillé (payé +25%).
 export function isRestDay(shift) { return !!shift?.is_day_off && !shift.hours }
 
 // Affiche des heures décimales en "XhMM" sans réarrondi (passe par les minutes).

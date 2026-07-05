@@ -38,8 +38,8 @@ export function monthlyDetail(shifts) {
     .map(([key, list]) => {
       const [y, mo] = key.split('-')
       const rows = list.slice().sort((a, b) => (a.shift_date < b.shift_date ? -1 : 1))
-      // Heures sup "normales" et heures d'un jour OFF travaillé (payé double) sont deux catégories
-      // distinctes : ne pas les sommer ensemble sous peine de mélanger deux taux de paie différents.
+      // Heures sup "normales" et heures d'un jour OFF travaillé sont gardées séparées ici pour
+      // l'affichage/les exports (voir payroll.js pour la fusion utilisée en paie).
       const total = rows.reduce((acc, s) => ({
         hours: acc.hours + Number(s.hours || 0),
         overtime: acc.overtime + (s.is_day_off ? 0 : Number(s.overtime_hours || 0)),
