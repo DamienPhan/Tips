@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import { todayLocal } from '../lib/date'
-import { recompute } from '../lib/parseShift'
 import {
   saveMission, deleteMission, loadAll, pullFromServer,
   saveShift, deleteShift, loadShifts, pullShifts
@@ -59,18 +58,6 @@ export const useMissions = create((set, get) => ({
   removeShift: async (id) => {
     await deleteShift(id)
     set({ shifts: get().shifts.filter(s => s.id !== id) })
-  },
-
-  // Migration ponctuelle : recalcule hours/overtime_hours/night_hours/night_overtime_hours
-  // de tous les shifts existants avec la formule courante (plus de x2/+25% baked-in sur les
-  // jours OFF travaillés), puis les remet en file de synchro vers Supabase.
-  recomputeAllShifts: async () => {
-    const shifts = get().shifts
-    for (const s of shifts) {
-      await saveShift({ ...s, ...recompute(s, s.is_day_off) })
-    }
-    set({ shifts: await loadShifts() })
-    return shifts.length
   },
 
   todayMissions: () => get().missions.filter(m => m.intervention_date === todayISO()),
