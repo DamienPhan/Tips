@@ -55,6 +55,72 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate) {
     doc.setTextColor(0)
     y += 12
 
+    // Relevé d'heures détaillé jour par jour (même contenu que l'ancien export "Relevé d'heures"
+    // de l'écran Accueil, retiré : tout est désormais réuni dans le PDF de paie) — affiché en
+    // premier, avant le récapitulatif de paie.
+    const detailX = [14, 38, 56, 92, 110, 130, 154, 176]
+    const detailW = W - 28
+    if (m.rows?.length) {
+      doc.setFillColor(...AMBER)
+      doc.rect(marginX, y - 4, 1.2, 5, 'F')
+      doc.setFont(FONT, 'bold')
+      doc.setFontSize(12)
+      doc.text('Détail des heures', marginX + 4, y)
+      y += 8
+
+      let zebraIdx = 0
+      let chunkTop = 0
+
+      const drawDetailHeader = () => {
+        doc.setFontSize(8.5)
+        doc.setFillColor(...AMBER_TINT)
+        doc.rect(marginX, y - 5, detailW, 7, 'F')
+        doc.setFont(FONT, 'bold')
+        SHIFT_TABLE_HEAD.forEach((h, i) => doc.text(h, detailX[i], y))
+        doc.setFont(FONT, 'normal')
+        chunkTop = y - 5
+        y += 7
+      }
+      const closeDetailChunk = () => {
+        doc.setDrawColor(...GREY_LINE)
+        doc.rect(marginX, chunkTop, detailW, y - chunkTop)
+      }
+
+      drawDetailHeader()
+      m.rows.forEach(s => {
+        if (zebraIdx % 2 === 1) {
+          doc.setFillColor(...ZEBRA_TINT)
+          doc.rect(marginX, y - 4.5, detailW, 6, 'F')
+        }
+        shiftRowCells(s).forEach((c, i) => doc.text(String(c), detailX[i], y))
+        y += 6
+        zebraIdx++
+        if (y > 280) {
+          closeDetailChunk()
+          doc.addPage()
+          y = 20
+          drawDetailHeader()
+        }
+      })
+      closeDetailChunk()
+      y += 12
+    }
+
+    // Le récapitulatif de paie a besoin d'environ 90mm (titre + en-tête + jusqu'à 4 lignes de
+    // catégorie + note OFF éventuelle + TOTAL + disclaimer) : on repart sur une nouvelle page
+    // plutôt que de le faire chevaucher le bas de la page si le relevé d'heures l'a rempli.
+    if (y + 90 > 290) {
+      doc.addPage()
+      y = 20
+    }
+
+    doc.setFillColor(...AMBER)
+    doc.rect(marginX, y - 4, 1.2, 5, 'F')
+    doc.setFont(FONT, 'bold')
+    doc.setFontSize(12)
+    doc.text('Récapitulatif de paie', marginX + 4, y)
+    y += 8
+
     const tableTop = y
     // En-tête
     doc.setFillColor(...AMBER_TINT)
@@ -108,62 +174,6 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate) {
     doc.setTextColor(150)
     doc.text('Simulation indicative — hors charges sociales et prélèvement à la source.', marginX, y)
     doc.setTextColor(0)
-    y += 8
-
-    // Séparateur explicite entre le résumé de paie et le relevé d'heures détaillé, plutôt que du
-    // simple espace blanc — évite l'impression de deux documents accolés au hasard.
-    doc.setDrawColor(...GREY_LINE)
-    doc.line(marginX, y, W - marginX, y)
-    y += 10
-
-    // Relevé d'heures détaillé jour par jour, même contenu que l'ancien export "Relevé d'heures"
-    // de l'écran Accueil (retiré : tout est désormais réuni dans le PDF de paie).
-    const detailX = [14, 38, 56, 92, 110, 130, 154, 176]
-    const detailW = W - 28
-    if (m.rows?.length) {
-      doc.setFillColor(...AMBER)
-      doc.rect(marginX, y - 4, 1.2, 5, 'F')
-      doc.setFont(FONT, 'bold')
-      doc.setFontSize(12)
-      doc.text('Détail des heures', marginX + 4, y)
-      y += 8
-
-      let zebraIdx = 0
-      let chunkTop = 0
-
-      const drawDetailHeader = () => {
-        doc.setFontSize(8.5)
-        doc.setFillColor(...AMBER_TINT)
-        doc.rect(marginX, y - 5, detailW, 7, 'F')
-        doc.setFont(FONT, 'bold')
-        SHIFT_TABLE_HEAD.forEach((h, i) => doc.text(h, detailX[i], y))
-        doc.setFont(FONT, 'normal')
-        chunkTop = y - 5
-        y += 7
-      }
-      const closeDetailChunk = () => {
-        doc.setDrawColor(...GREY_LINE)
-        doc.rect(marginX, chunkTop, detailW, y - chunkTop)
-      }
-
-      drawDetailHeader()
-      m.rows.forEach(s => {
-        if (zebraIdx % 2 === 1) {
-          doc.setFillColor(...ZEBRA_TINT)
-          doc.rect(marginX, y - 4.5, detailW, 6, 'F')
-        }
-        shiftRowCells(s).forEach((c, i) => doc.text(String(c), detailX[i], y))
-        y += 6
-        zebraIdx++
-        if (y > 280) {
-          closeDetailChunk()
-          doc.addPage()
-          y = 20
-          drawDetailHeader()
-        }
-      })
-      closeDetailChunk()
-    }
   })
 
   doc.save(`simulation-paie-${payrollByMonth[0]?.key || todayLocal().slice(0, 7)}.pdf`)

@@ -6,9 +6,19 @@ import { exportPayrollPdf, exportPayrollXlsx } from '../lib/exportPayroll'
 
 const RATE_KEY = 'payroll:hourlyRate'
 
+// Erreur typique d'un chunk (jspdf/xlsx) devenu introuvable après un déploiement : le service
+// worker (registerType 'autoUpdate') a basculé en silence sur une nouvelle version sans recharger
+// l'onglet déjà ouvert, qui continue de référencer les anciens noms de fichiers hashés. Les
+// navigateurs formulent l'erreur différemment (Chromium/Firefox/Safari) d'où plusieurs motifs.
+function isStaleChunkError(e) {
+  const msg = String(e?.message || e)
+  return /Importing a module script failed|Failed to fetch dynamically imported module|error loading dynamically imported module/i.test(msg)
+}
+
 export default function PayrollSimulator() {
   const shifts = useMissions(s => s.shifts)
   const [hourlyRate, setHourlyRate] = useState(() => Number(localStorage.getItem(RATE_KEY)) || 12.5)
+  const [rateDraft, setRateDraft] = useState(() => String(Number(localStorage.getItem(RATE_KEY)) || 12.5).replace('.', ','))
   const [monthKey, setMonthKey] = useState(() => new Date().toISOString().slice(0, 7))
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
@@ -23,7 +33,8 @@ export default function PayrollSimulator() {
   const current = results.find(r => r.key === monthKey) || results[results.length - 1]
 
   function updateRate(v) {
-    const n = Number(v) || 0
+    setRateDraft(v)
+    const n = Number(String(v).replace(',', '.')) || 0
     setHourlyRate(n)
     localStorage.setItem(RATE_KEY, String(n))
   }
@@ -36,6 +47,13 @@ export default function PayrollSimulator() {
       else await exportPayrollXlsx([current], hourlyRate)
     } catch (e) {
       console.error('Export paie échoué', e)
+      if (isStaleChunkError(e)) {
+        // La page tourne encore sur un ancien build dont les chunks ont disparu du serveur après
+        // un déploiement : un rechargement récupère la version courante plutôt que de laisser
+        // l'utilisateur bloqué sur une erreur qu'un simple F5 aurait réglée.
+        window.location.reload()
+        return
+      }
       setError(e.message || String(e))
     }
     setBusy(null)
@@ -47,7 +65,7 @@ export default function PayrollSimulator() {
 
       <section className="bg-surface rounded-2xl p-4 mb-4">
         <label className="text-muted text-xs uppercase tracking-wider mb-1.5 block">Taux horaire (€/h)</label>
-        <input inputMode="decimal" type="number" step="0.01" min="0" value={hourlyRate}
+        <input inputMode="decimal" type="text" value={rateDraft}
           onChange={e => updateRate(e.target.value)}
           className="w-full bg-surface-2 rounded-xl px-3.5 py-3 text-base outline-none focus:ring-2 focus:ring-amber/40 mb-3" />
 
