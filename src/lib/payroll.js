@@ -1,36 +1,40 @@
 import { monthlyDetail } from './monthlyDetail'
 
 export const DEFAULT_RATES = {
-  overtimeThresholdHours: 34,  // au-delà de 34h de sup cumulées dans le mois, majoration 50%
-  overtimeMultiplierLow: 1.25, // heures sup jusqu'à 34h
-  overtimeMultiplierHigh: 1.5, // heures sup au-delà de 34h
-  nightBonusRate: 0.25         // prime de nuit, en supplément du taux de base
+  overtimeThresholdHours: 33,  // les 33 premières heures de sup dans le mois à +25%, à partir de la 34e heure : +50%
+  overtimeMultiplierLow: 1.25, // heures sup jusqu'à la 33e heure
+  overtimeMultiplierHigh: 1.5, // heures sup à partir de la 34e heure
+  nightBonusRate: 0.25,        // prime de nuit, en supplément du taux de base
+  offWorkedBonusRate: 0.25     // prime jour OFF travaillé, en supplément du taux de base
 }
 
 // Calcule la simulation de paie pour un mois (élément retourné par monthlyDetail()).
-// Les heures d'un jour OFF travaillé n'ont plus de majoration propre : une fois comptées en
-// intégralité (total.offWorked, cf. overtimeMin() dans parseShift.js), elles rejoignent le même
-// pool que les heures sup normales et suivent le même barème mensuel (≤34h à +25%, au-delà à +50%).
+// Jour OFF travaillé et heures de nuit sont deux primes à part, chacune +25% en plus du taux de
+// base sur chaque heure concernée (même mécanique que la prime de nuit) — ces heures ne rejoignent
+// plus le pool des heures sup normales et n'affectent pas le seuil mensuel de 33h/50%.
 export function computeMonthPayroll(month, hourlyRate, rates = DEFAULT_RATES) {
   const total = month.total
   const offWorkedHours = total.offWorked
 
-  const baseHours = Math.max(0, total.hours - total.overtime - offWorkedHours)
+  // Les heures d'un jour OFF travaillé comptent comme des heures normales pour leur paie de base
+  // (la prime jour OFF ci-dessous s'ajoute par-dessus) ; seules les vraies heures sup (jour normal)
+  // alimentent le pool majoré à 25%/50%.
+  const baseHours = Math.max(0, total.hours - total.overtime)
   const baseAmount = baseHours * hourlyRate
 
-  const combinedOvertimeHours = total.overtime + offWorkedHours
-  const overtimeLowHours = Math.min(combinedOvertimeHours, rates.overtimeThresholdHours)
-  const overtimeHighHours = Math.max(0, combinedOvertimeHours - rates.overtimeThresholdHours)
+  const overtimeLowHours = Math.min(total.overtime, rates.overtimeThresholdHours)
+  const overtimeHighHours = Math.max(0, total.overtime - rates.overtimeThresholdHours)
   const overtimeLowAmount = overtimeLowHours * hourlyRate * rates.overtimeMultiplierLow
   const overtimeHighAmount = overtimeHighHours * hourlyRate * rates.overtimeMultiplierHigh
 
   const nightBonus = total.night * hourlyRate * rates.nightBonusRate
+  const offWorkedBonus = offWorkedHours * hourlyRate * rates.offWorkedBonusRate
 
-  const grossTotal = baseAmount + overtimeLowAmount + overtimeHighAmount + nightBonus
+  const grossTotal = baseAmount + overtimeLowAmount + overtimeHighAmount + nightBonus + offWorkedBonus
 
   return {
     baseHours, baseAmount,
-    offWorkedHours, // informatif : déjà inclus dans overtimeLowHours/overtimeHighHours
+    offWorkedHours, offWorkedBonus,
     overtimeLowHours, overtimeHighHours, overtimeLowAmount, overtimeHighAmount,
     nightHours: total.night, nightBonus,
     grossTotal
@@ -54,10 +58,14 @@ export function computePayroll(shifts, hourlyRate, rates = DEFAULT_RATES) {
 // base de jsPDF (WinAnsi/CP1252) n'ont pas le glyphe "≤", ce qui produisait du texte corrompu
 // dans le PDF exporté.
 export function payrollRows(p) {
-  return [
+  const rows = [
     { label: 'Heures normales', hours: p.baseHours, amount: p.baseAmount },
-    { label: "Heures sup jusqu'à 34h (+25%)", hours: p.overtimeLowHours, amount: p.overtimeLowAmount },
-    { label: 'Heures sup au-delà de 34h (+50%)', hours: p.overtimeHighHours, amount: p.overtimeHighAmount },
+    { label: "Heures sup jusqu'à 33h (+25%)", hours: p.overtimeLowHours, amount: p.overtimeLowAmount },
+    { label: 'Heures sup à partir de 34h (+50%)', hours: p.overtimeHighHours, amount: p.overtimeHighAmount },
     { label: 'Prime de nuit (+25%)', hours: p.nightHours, amount: p.nightBonus }
   ]
+  if (p.offWorkedHours > 0) {
+    rows.push({ label: 'Prime jour OFF (+25%)', hours: p.offWorkedHours, amount: p.offWorkedBonus })
+  }
+  return rows
 }
