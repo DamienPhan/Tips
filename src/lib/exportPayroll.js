@@ -141,15 +141,6 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate) {
       y += rowH
     })
 
-    if (p.offWorkedHours > 0) {
-      doc.setFontSize(8)
-      doc.setTextColor(130)
-      doc.text(`dont ${fmtHours(p.offWorkedHours)} de jours OFF travaillés, inclus dans les heures sup ci-dessus`, colX[0] + 3, y + rowH / 2 + 1.2)
-      doc.setTextColor(0)
-      doc.setFontSize(10)
-      y += rowH
-    }
-
     // TOTAL
     doc.setFillColor(...AMBER)
     doc.rect(marginX, y, tableW, rowH + 1, 'F')
@@ -206,10 +197,6 @@ export async function exportPayrollXlsx(payrollByMonth, hourlyRate) {
     const catStart = data.length
     rows.forEach(r => push([r.label, Number(r.hours.toFixed(2)), Number(r.amount.toFixed(2))]))
     const catEnd = data.length
-    let offRow = -1
-    if (p.offWorkedHours > 0) {
-      offRow = push([`    dont jours OFF travaillés (inclus ci-dessus)`, Number(p.offWorkedHours.toFixed(2)), ''])
-    }
     push([])
     const totalRow = push(['TOTAL BRUT ESTIMÉ', '', Number(p.grossTotal.toFixed(2))])
     push([])
@@ -231,7 +218,6 @@ export async function exportPayrollXlsx(payrollByMonth, hourlyRate) {
       setFmt(r, 1, HOURS_FMT)
       setFmt(r, 2, EUR_FMT)
     }
-    if (offRow >= 0) setFmt(offRow, 1, HOURS_FMT)
     setFmt(totalRow, 2, EUR_FMT)
 
     XLSX.utils.book_append_sheet(wb, ws, m.sheet)

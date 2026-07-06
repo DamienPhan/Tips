@@ -83,11 +83,6 @@ export default function PayrollSimulator() {
         <>
           <section className="bg-surface rounded-2xl p-4 mb-4 divide-y divide-white/5">
             {payrollRows(current.payroll).map(r => <Row key={r.label} label={r.label} hours={r.hours} amount={r.amount} />)}
-            {current.payroll.offWorkedHours > 0 && (
-              <p className="text-muted text-xs pt-3">
-                dont {fmtHours(current.payroll.offWorkedHours)} de jours OFF travaillés, incluses dans les heures sup ci-dessus
-              </p>
-            )}
             <div className="flex items-baseline justify-between pt-3">
               <span className="font-medium text-sm">Total brut estimé</span>
               <span className="tnum font-display font-bold text-amber text-xl">{current.payroll.grossTotal.toFixed(2)} €</span>
