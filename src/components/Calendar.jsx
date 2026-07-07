@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMissions } from '../store/missions'
-import { fmtHours, fmtMinutes, recompute, workedMin, overtimePayMin, isRestDay } from '../lib/parseShift'
+import { fmtHours, fmtMinutes, recompute, workedMin, overtimePayMin, nightBreakdown, isRestDay } from '../lib/parseShift'
 import { parseLocal } from '../lib/date'
 import { eur, MONTHS } from '../lib/format'
 
@@ -92,7 +92,8 @@ export default function Calendar() {
     const s = parseTime(startStr), e = parseTime(endStr)
     if (s !== null && e !== null) {
       const w = workedMin({ start_min: s, end_min: e })
-      preview = { brut: fmtHours(w / 60), sup: fmtHours(overtimePayMin(w, editOff) / 60) }
+      const night = nightBreakdown({ start_min: s, end_min: e }, editOff)
+      preview = { brut: fmtHours(w / 60), sup: fmtHours(overtimePayMin(w, editOff) / 60), nuit: fmtHours(night.night_hours) }
     }
   }
 
@@ -205,6 +206,7 @@ export default function Calendar() {
                 <div className="flex justify-between text-sm bg-night rounded-xl px-3 py-2.5">
                   <span className="text-muted">Brut {preview.brut}</span>
                   <span className={preview.sup !== '0h' ? 'text-error' : 'text-muted'}>Sup {preview.sup}</span>
+                  <span className={preview.nuit !== '0h' ? 'text-error' : 'text-muted'}>Nuit {preview.nuit}</span>
                 </div>
               )}
               {err && <p className="text-error text-sm">{err}</p>}

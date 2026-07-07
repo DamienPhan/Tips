@@ -1,30 +1,66 @@
 const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 
-// Regroupe des shifts par mois calendaire avec les totaux agrégés — utilisé par payroll.js
-// (simulation de paie, exports Excel/PDF). Isolé dans son propre module (pur, sans dépendance
-// à xlsx/jspdf) pour ne pas forcer ces libs dans le bundle principal.
+// Clôture de paie de l'employeur : SEULES les heures sup et les heures d'un jour OFF travaillé
+// comptées jusqu'au 25 du mois inclus tombent dans le bulletin du mois en cours, celles du 26 à la
+// fin du mois basculent sur le bulletin du mois suivant — vérifié auprès de l'utilisateur, les
+// heures normales et les heures de nuit restent sur le mois calendaire réel du shift, seules les
+// heures majorées (sup/jour OFF) suivent cette coupure administrative.
+function payrollCutoffMonthKey(dateStr) {
+  const [y, mo, d] = dateStr.split('-').map(Number)
+  if (d <= 25) return `${y}-${String(mo).padStart(2, '0')}`
+  const ny = mo === 12 ? y + 1 : y
+  const nmo = mo === 12 ? 1 : mo + 1
+  return `${ny}-${String(nmo).padStart(2, '0')}`
+}
+
+// Regroupe des shifts par mois avec les totaux agrégés — utilisé par payroll.js (simulation de
+// paie, exports Excel/PDF). Isolé dans son propre module (pur, sans dépendance à xlsx/jspdf) pour
+// ne pas forcer ces libs dans le bundle principal.
+//
+// Deux regroupements différents cohabitent, par champ (voir payrollCutoffMonthKey ci-dessus) :
+// - `rows` (relevé jour par jour) et les heures normales/de nuit du total : mois calendaire réel.
+// - les heures sup et les heures de jour OFF travaillé du total : mois de paie (coupure au 25).
+// Un shift daté du 27 juin par ex. apparaît dans le relevé de juin avec ses heures normales, mais
+// sa part d'heures sup rejoint le total du bulletin de juillet, pas celui de juin.
 export function monthlyDetail(shifts) {
-  const map = new Map()
+  const calendarMap = new Map() // mois calendaire -> shifts (relevé, heures normales/nuit)
+  const cutoffMap = new Map()   // mois de paie -> { overtime, offWorked }
+
   for (const s of shifts) {
     if (!s.shift_date) continue // ligne corrompue (date manquante) : ignorée plutôt que de faire échouer tout l'export
-    const key = s.shift_date.slice(0, 7)
-    if (!map.has(key)) map.set(key, [])
-    map.get(key).push(s)
+    const calKey = s.shift_date.slice(0, 7)
+    if (!calendarMap.has(calKey)) calendarMap.set(calKey, [])
+    calendarMap.get(calKey).push(s)
+
+    const cutKey = payrollCutoffMonthKey(s.shift_date)
+    if (!cutoffMap.has(cutKey)) cutoffMap.set(cutKey, { overtime: 0, offWorked: 0 })
+    const bucket = cutoffMap.get(cutKey)
+    const otHours = Number(s.overtime_hours || 0)
+    if (s.is_day_off) bucket.offWorked += otHours
+    else bucket.overtime += otHours
   }
-  return [...map.entries()]
-    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-    .map(([key, list]) => {
-      const [y, mo] = key.split('-')
-      const rows = list.slice().sort((a, b) => (a.shift_date < b.shift_date ? -1 : 1))
-      // Heures sup "normales" et heures d'un jour OFF travaillé sont gardées séparées ici pour
-      // l'affichage/les exports (voir payroll.js pour la fusion utilisée en paie).
-      const total = rows.reduce((acc, s) => ({
-        hours: acc.hours + Number(s.hours || 0),
-        overtime: acc.overtime + (s.is_day_off ? 0 : Number(s.overtime_hours || 0)),
-        offWorked: acc.offWorked + (s.is_day_off ? Number(s.overtime_hours || 0) : 0),
-        night: acc.night + Number(s.night_hours || 0),
-        nightOvertime: acc.nightOvertime + Number(s.night_overtime_hours || 0)
-      }), { hours: 0, overtime: 0, offWorked: 0, night: 0, nightOvertime: 0 })
-      return { key, label: `${MONTHS[+mo - 1]} ${y}`, sheet: `${MONTHS[+mo - 1].slice(0, 4)} ${y}`, rows, total }
-    })
+
+  const keys = new Set([...calendarMap.keys(), ...cutoffMap.keys()])
+  return [...keys].sort().map(key => {
+    const [y, mo] = key.split('-')
+    const rows = (calendarMap.get(key) || []).slice().sort((a, b) => (a.shift_date < b.shift_date ? -1 : 1))
+    // Heures normales = heures du shift moins sa part de sup (déjà exclue des heures majorées d'un
+    // jour OFF travaillé, qui comptent en intégralité comme heures normales — la prime jour OFF
+    // s'ajoute par-dessus, voir payroll.js).
+    const baseHours = rows.reduce((sum, s) => {
+      const h = Number(s.hours || 0)
+      const ot = s.is_day_off ? 0 : Number(s.overtime_hours || 0)
+      return sum + Math.max(0, h - ot)
+    }, 0)
+    const night = rows.reduce((sum, s) => sum + Number(s.night_hours || 0), 0)
+    const nightOvertime = rows.reduce((sum, s) => sum + Number(s.night_overtime_hours || 0), 0)
+    const cutoff = cutoffMap.get(key) || { overtime: 0, offWorked: 0 }
+    return {
+      key,
+      label: `${MONTHS[+mo - 1]} ${y}`,
+      sheet: `${MONTHS[+mo - 1].slice(0, 4)} ${y}`,
+      rows,
+      total: { baseHours, overtime: cutoff.overtime, offWorked: cutoff.offWorked, night, nightOvertime }
+    }
+  })
 }
