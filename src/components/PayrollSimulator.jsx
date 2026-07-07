@@ -1,10 +1,21 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useMissions } from '../store/missions'
-import { computePayroll, payrollRows } from '../lib/payroll'
+import { computePayroll, payrollRows, DEFAULT_RATES } from '../lib/payroll'
 import { fmtHours } from '../lib/parseShift'
 import { exportPayrollPdf, exportPayrollXlsx } from '../lib/exportPayroll'
 
 const RATE_KEY = 'payroll:hourlyRate'
+const PAY_MODE_KEY = 'payroll:payMode'
+const WEEKLY_BASE_HOURS_KEY = 'payroll:weeklyBaseHours'
+const ABSENCE_DAYS_KEY = 'payroll:absenceDays'
+
+function readAbsenceDays() {
+  try { return JSON.parse(localStorage.getItem(ABSENCE_DAYS_KEY)) || {} } catch { return {} }
+}
+
+function draftFromMap(map) {
+  return Object.fromEntries(Object.entries(map).map(([k, v]) => [k, String(v).replace('.', ',')]))
+}
 
 // Erreur typique d'un chunk (jspdf/xlsx) devenu introuvable après un déploiement : le service
 // worker (registerType 'autoUpdate') a basculé en silence sur une nouvelle version sans recharger
@@ -23,13 +34,25 @@ export default function PayrollSimulator() {
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
 
+  // 'hourly' (défaut) : base payée sur les heures réellement pointées. 'monthly' : reproduit le
+  // mécanisme "salarié mensualisé" d'un vrai bulletin (base légale fixe + prorata d'absence en
+  // jours) — voir la doc de computeMonthPayroll dans payroll.js pour le détail du calcul.
+  const [payMode, setPayMode] = useState(() => localStorage.getItem(PAY_MODE_KEY) === 'monthly' ? 'monthly' : 'hourly')
+  const [weeklyBaseHours, setWeeklyBaseHours] = useState(() => Number(localStorage.getItem(WEEKLY_BASE_HOURS_KEY)) || DEFAULT_RATES.weeklyBaseHours)
+  const [weeklyBaseHoursDraft, setWeeklyBaseHoursDraft] = useState(() => String(Number(localStorage.getItem(WEEKLY_BASE_HOURS_KEY)) || DEFAULT_RATES.weeklyBaseHours).replace('.', ','))
+  const [absenceDaysByMonth, setAbsenceDaysByMonth] = useState(readAbsenceDays)
+  const [absenceDraftByMonth, setAbsenceDraftByMonth] = useState(() => draftFromMap(readAbsenceDays()))
+  const absenceDraft = absenceDraftByMonth[monthKey] ?? ''
+
   // Précharge jsPDF/xlsx dès l'ouverture de l'onglet : sur Safari iOS / PWA installée, un
   // téléchargement déclenché après un `await import(...)` réseau perd le "geste utilisateur"
   // du clic et échoue silencieusement. En préchargeant ici, l'import est déjà en cache au
   // moment du clic et le déclenchement du fichier reste dans la même activation.
   useEffect(() => { import('jspdf'); import('xlsx') }, [])
 
-  const results = useMemo(() => computePayroll(shifts, hourlyRate), [shifts, hourlyRate])
+  const rates = useMemo(() => ({ ...DEFAULT_RATES, weeklyBaseHours }), [weeklyBaseHours])
+  const results = useMemo(() => computePayroll(shifts, hourlyRate, rates, { payMode, absenceDaysByMonth }),
+    [shifts, hourlyRate, rates, payMode, absenceDaysByMonth])
   const current = results.find(r => r.key === monthKey) || results[results.length - 1]
 
   function updateRate(v) {
@@ -37,6 +60,26 @@ export default function PayrollSimulator() {
     const n = Number(String(v).replace(',', '.')) || 0
     setHourlyRate(n)
     localStorage.setItem(RATE_KEY, String(n))
+  }
+
+  function updatePayMode(mode) {
+    setPayMode(mode)
+    localStorage.setItem(PAY_MODE_KEY, mode)
+  }
+
+  function updateWeeklyBaseHours(v) {
+    setWeeklyBaseHoursDraft(v)
+    const n = Number(String(v).replace(',', '.')) || 0
+    setWeeklyBaseHours(n)
+    localStorage.setItem(WEEKLY_BASE_HOURS_KEY, String(n))
+  }
+
+  function updateAbsenceDays(v) {
+    setAbsenceDraftByMonth({ ...absenceDraftByMonth, [monthKey]: v })
+    const n = Number(String(v).replace(',', '.')) || 0
+    const next = { ...absenceDaysByMonth, [monthKey]: n }
+    setAbsenceDaysByMonth(next)
+    localStorage.setItem(ABSENCE_DAYS_KEY, JSON.stringify(next))
   }
 
   const run = async (kind) => {
@@ -64,10 +107,39 @@ export default function PayrollSimulator() {
       <h2 className="text-lg font-semibold mb-4">Simulation de paie</h2>
 
       <section className="bg-surface rounded-2xl p-4 mb-4">
+        <label className="text-muted text-xs uppercase tracking-wider mb-1.5 block">Mode de calcul</label>
+        <div className="flex gap-2 mb-3">
+          <button onClick={() => updatePayMode('hourly')} aria-pressed={payMode === 'hourly'}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-medium ${payMode === 'hourly' ? 'bg-amber text-night' : 'bg-surface-2 text-muted'}`}>
+            Heures réelles
+          </button>
+          <button onClick={() => updatePayMode('monthly')} aria-pressed={payMode === 'monthly'}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-medium ${payMode === 'monthly' ? 'bg-amber text-night' : 'bg-surface-2 text-muted'}`}>
+            Mensualisé
+          </button>
+        </div>
+
         <label className="text-muted text-xs uppercase tracking-wider mb-1.5 block">Taux horaire (€/h)</label>
         <input inputMode="decimal" type="text" value={rateDraft}
           onChange={e => updateRate(e.target.value)}
           className="w-full bg-surface-2 rounded-xl px-3.5 py-3 text-base outline-none focus:ring-2 focus:ring-amber/40 mb-3" />
+
+        {payMode === 'monthly' && (
+          <div className="flex gap-3 mb-3">
+            <div className="flex-1">
+              <label className="text-muted text-xs uppercase tracking-wider mb-1.5 block">Base légale (h/semaine)</label>
+              <input inputMode="decimal" type="text" value={weeklyBaseHoursDraft}
+                onChange={e => updateWeeklyBaseHours(e.target.value)}
+                className="w-full bg-surface-2 rounded-xl px-3.5 py-3 text-base outline-none focus:ring-2 focus:ring-amber/40" />
+            </div>
+            <div className="flex-1">
+              <label className="text-muted text-xs uppercase tracking-wider mb-1.5 block">Absence (j, prorata)</label>
+              <input inputMode="decimal" type="text" value={absenceDraft} placeholder="0"
+                onChange={e => updateAbsenceDays(e.target.value)}
+                className="w-full bg-surface-2 rounded-xl px-3.5 py-3 text-base outline-none focus:ring-2 focus:ring-amber/40" />
+            </div>
+          </div>
+        )}
 
         <label className="text-muted text-xs uppercase tracking-wider mb-1.5 block">Mois</label>
         <select value={monthKey} onChange={e => setMonthKey(e.target.value)}
