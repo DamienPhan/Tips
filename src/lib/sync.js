@@ -123,10 +123,13 @@ export function initSync() {
       await pullFromServer(); await pullShifts()
     })
   }
-  flush()
-  flushShifts()
-  pullFromServer()
-  pullShifts()
+  // Doit flush avant de puller (même ordre que le handler 'online' ci-dessus) : sinon un pull
+  // concurrent au démarrage peut écraser une écriture locale tout juste flushée, ou ressusciter
+  // une ligne qu'on vient de supprimer, avec une donnée serveur périmée.
+  ;(async () => {
+    await flush(); await flushShifts()
+    await pullFromServer(); await pullShifts()
+  })()
 }
 
 const SHIFT_COLUMNS = ['id', 'shift_date', 'start_min', 'end_min', 'hours', 'overtime_hours', 'is_day_off', 'night_hours', 'night_overtime_hours', 'created_at', 'updated_at']

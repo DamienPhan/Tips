@@ -65,8 +65,8 @@ create table if not exists work_shifts (
   shift_date date not null,
   start_min int not null,
   end_min int not null,
-  hours numeric(4,1) not null,
-  overtime_hours numeric(4,1) default 0,
+  hours numeric(5,2) not null,
+  overtime_hours numeric(5,2) default 0,
   is_day_off boolean default false,
   night_hours numeric(5,2) default 0,
   night_overtime_hours numeric(5,2) default 0,
@@ -85,3 +85,8 @@ create policy owner_all_shifts on work_shifts
 -- Migration non destructive (si table déjà existante) :
 -- alter table work_shifts add column if not exists is_day_off boolean default false;
 -- alter table work_shifts add column if not exists updated_at timestamptz default now();
+-- hours/overtime_hours étaient en numeric(4,1) (1 décimale) : un shift de 3h45/6h15 (fractions
+-- .25/.75) se faisait arrondir silencieusement par Postgres à l'écriture (3.75 -> 3.8), faussant
+-- l'affichage après un aller-retour serveur. Passage à numeric(5,2), comme night_hours/night_overtime_hours.
+-- alter table work_shifts alter column hours type numeric(5,2);
+-- alter table work_shifts alter column overtime_hours type numeric(5,2);

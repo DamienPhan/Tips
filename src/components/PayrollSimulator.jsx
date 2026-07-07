@@ -3,6 +3,7 @@ import { useMissions } from '../store/missions'
 import { computePayroll, payrollRows, DEFAULT_RATES } from '../lib/payroll'
 import { fmtHours } from '../lib/parseShift'
 import { exportPayrollPdf, exportPayrollXlsx } from '../lib/exportPayroll'
+import { todayLocal } from '../lib/date'
 
 const RATE_KEY = 'payroll:hourlyRate'
 const PAY_MODE_KEY = 'payroll:payMode'
@@ -30,7 +31,7 @@ export default function PayrollSimulator() {
   const shifts = useMissions(s => s.shifts)
   const [hourlyRate, setHourlyRate] = useState(() => Number(localStorage.getItem(RATE_KEY)) || 12.5)
   const [rateDraft, setRateDraft] = useState(() => String(Number(localStorage.getItem(RATE_KEY)) || 12.5).replace('.', ','))
-  const [monthKey, setMonthKey] = useState(() => new Date().toISOString().slice(0, 7))
+  const [monthKey, setMonthKey] = useState(() => todayLocal().slice(0, 7))
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
 
@@ -76,7 +77,7 @@ export default function PayrollSimulator() {
 
   function updateAbsenceDays(v) {
     setAbsenceDraftByMonth({ ...absenceDraftByMonth, [monthKey]: v })
-    const n = Number(String(v).replace(',', '.')) || 0
+    const n = Math.max(0, Number(String(v).replace(',', '.')) || 0)
     const next = { ...absenceDaysByMonth, [monthKey]: n }
     setAbsenceDaysByMonth(next)
     localStorage.setItem(ABSENCE_DAYS_KEY, JSON.stringify(next))

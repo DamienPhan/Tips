@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import {
   saveMission, deleteMission, loadAll, pullFromServer,
-  saveShift, deleteShift, loadShifts, pullShifts
+  saveShift, deleteShift, loadShifts, pullShifts,
+  flush, flushShifts
 } from '../lib/sync'
 
 export const useMissions = create((set, get) => ({
@@ -11,6 +12,11 @@ export const useMissions = create((set, get) => ({
 
   init: async () => {
     set({ missions: await loadAll(), shifts: await loadShifts(), loading: false })
+    // Flush avant de puller : sinon une écriture locale en attente peut se faire écraser par
+    // une lecture serveur périmée au moment où l'app retrouve la connexion (cas le plus courant
+    // d'ouverture de l'app après une session hors-ligne).
+    await flush()
+    await flushShifts()
     await pullFromServer()
     await pullShifts()
     set({ missions: await loadAll(), shifts: await loadShifts() })
