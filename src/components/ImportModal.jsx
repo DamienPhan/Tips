@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { parseImport } from '../lib/parseImport'
-import { recompute, fmtMinutes } from '../lib/parseShift'
+import { recompute, fmtMinutes, fmtHours } from '../lib/parseShift'
 import { useMissions } from '../store/missions'
 
 const SERVICE_LABEL = { ARR: 'Arrivée', DEP: 'Départ', TRANSIT: 'Transit' }
@@ -100,7 +100,7 @@ export default function ImportModal({ onClose, onManual }) {
                   className="w-full bg-surface rounded-xl px-4 py-3 flex items-center justify-between gap-3 text-left">
                   <div>
                     <span className="text-sm">{s.shift_date}</span>
-                    <p className="text-muted text-xs mt-0.5">{fmtMinutes(s.start_min)} – {fmtMinutes(s.end_min)} · {s.hours}h</p>
+                    <p className="text-muted text-xs mt-0.5">{fmtMinutes(s.start_min)} – {fmtMinutes(s.end_min)} · {fmtHours(s.hours)}</p>
                   </div>
                   <span className={`text-xs rounded-full px-3 py-1 ${offFlags[i] ? 'bg-error/15 text-error' : 'bg-surface-2 text-muted'}`}>
                     {offFlags[i] ? 'OFF' : 'Normal'}
