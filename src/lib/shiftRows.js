@@ -1,4 +1,5 @@
 import { isRestDay, fmtHours } from './parseShift'
+import { parseLocal } from './date'
 
 const DOW = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
 
@@ -12,8 +13,7 @@ function fmtClock(min) {
 
 function dayName(dateStr) {
   if (!dateStr) return '—'
-  const [y, m, d] = dateStr.split('-').map(Number)
-  return DOW[new Date(y, m - 1, d).getDay()]
+  return DOW[parseLocal(dateStr).getDay()]
 }
 
 // Détail jour par jour d'un mois de shifts — utilisé par le relevé d'heures et le PDF de paie.

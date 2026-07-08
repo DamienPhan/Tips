@@ -34,15 +34,24 @@ function normDate(raw) {
   return `${year}-${String(+mo).padStart(2, '0')}-${String(+d).padStart(2, '0')}`
 }
 
+// Enlève les accents avant comparaison : `'Départ'.toUpperCase()` donne 'DÉPART', qui ne matche
+// pas `.startsWith('DEP')` (É ≠ E) — normService() a silencieusement classé tout "Départ" en
+// "Arrivée" par défaut jusqu'à ce que ce soit corrigé. normBookingMode() gérait déjà ce même
+// problème au cas par cas pour "Pré-booking" (`u.includes('PRE') || u.includes('PRÉ')`) ; les deux
+// utilisent maintenant ce helper pour éviter qu'un futur libellé accentué retombe dans le même piège.
+function stripAccents(s) {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+}
+
 function normBookingMode(raw) {
-  const u = raw.toUpperCase()
-  if (u.includes('PRE') || u.includes('PRÉ')) return 'PRE'
+  const u = stripAccents(raw).toUpperCase()
+  if (u.includes('PRE')) return 'PRE'
   if (u.includes('LIVE')) return 'LIVE'
   return null
 }
 
 function normService(raw) {
-  const u = raw.toUpperCase()
+  const u = stripAccents(raw).toUpperCase()
   if (u.startsWith('ARR')) return 'ARR'
   if (u.startsWith('DEP')) return 'DEP'
   if (u.startsWith('TRANS')) return 'TRANSIT'
