@@ -1,7 +1,7 @@
 import { todayLocal } from './date'
 import { fmtHours } from './parseShift'
 import { payrollRows } from './payroll'
-import { SHIFT_TABLE_HEAD, shiftRowCells } from './shiftRows'
+import { SHIFT_TABLE_HEAD, shiftRowCells, shiftTotalsRow } from './shiftRows'
 
 function eur(n) { return `${Number(n || 0).toFixed(2)} €` }
 
@@ -102,6 +102,16 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate) {
           drawDetailHeader()
         }
       })
+
+      // Ligne de totaux : fond distinct + gras, même si elle prend une septième colonne (Date/Jour
+      // vides, "Total" dans la colonne Horaires) plutôt que d'ajouter une colonne dédiée.
+      doc.setFillColor(...AMBER_TINT)
+      doc.rect(marginX, y - 4.5, detailW, 6, 'F')
+      doc.setFont(FONT, 'bold')
+      shiftTotalsRow(m.rows).forEach((c, i) => doc.text(String(c), detailX[i], y))
+      doc.setFont(FONT, 'normal')
+      y += 6
+
       closeDetailChunk()
       y += 12
     }
@@ -233,6 +243,7 @@ export async function exportPayrollXlsx(payrollByMonth, hourlyRate) {
     push(['DÉTAIL DES HEURES'])
     push(SHIFT_TABLE_HEAD)
     ;(m.rows || []).forEach(s => push(shiftRowCells(s)))
+    if (m.rows?.length) push(shiftTotalsRow(m.rows))
 
     const ws = XLSX.utils.aoa_to_sheet(data)
     ws['!cols'] = [{ wch: 50 }, { wch: 11 }, { wch: 16 }, { wch: 8 }, { wch: 8 }, { wch: 11 }, { wch: 8 }, { wch: 10 }]

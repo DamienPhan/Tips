@@ -31,3 +31,12 @@ export function shiftRowCells(s) {
     fmtHours(s.night_overtime_hours)
   ]
 }
+
+// Ligne de totaux du tableau détail des heures — mêmes colonnes que shiftRowCells(), somme des
+// heures de chaque colonne numérique (Durée/Sup/OFF trav./Nuit/Sup nuit) sur tous les shifts du mois.
+export function shiftTotalsRow(rows) {
+  const sum = key => rows.reduce((acc, s) => acc + Number(s[key] || 0), 0)
+  const sumOvertime = rows.reduce((acc, s) => acc + (s.is_day_off ? 0 : Number(s.overtime_hours || 0)), 0)
+  const sumOffWorked = rows.reduce((acc, s) => acc + (s.is_day_off ? Number(s.overtime_hours || 0) : 0), 0)
+  return ['', '', 'Total', fmtHours(sum('hours')), fmtHours(sumOvertime), fmtHours(sumOffWorked), fmtHours(sum('night_hours')), fmtHours(sum('night_overtime_hours'))]
+}
