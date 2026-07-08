@@ -30,6 +30,30 @@ function toMinutes(h, m) {
   return (+h) * 60 + (m ? +m : 0)
 }
 
+// Motif d'une ligne shift ("d/m : HhMM - HhMM"), source unique partagée entre parseShifts()
+// ci-dessous et le sniff de contenu dans parseImport.js, pour que les deux ne dérivent pas l'un de
+// l'autre — comme c'est déjà arrivé une fois pour le champ Booking (voir parseReport.js). Le tiret
+// entre les deux heures est optionnel et chaque heure peut être suivie d'un point final : certains
+// utilisateurs notent "7h.  17h30" ou "9h 17h" (sans tiret) plutôt que le format à tiret "7h - 17h30".
+// Le "h" reste obligatoire (jamais optionnel) pour deux raisons : (1) sans lui, un texte sans
+// rapport comme "12/05 : 123" (aucune heure) matchait quand même une fois le tiret rendu optionnel,
+// le sniff de parseImport.js le classant à tort comme un relevé d'heures ; (2) le point final ne
+// peut pas être suivi d'un chiffre (`(?!\d)`), sinon une notation ambiguë comme "6h.30" (point entre
+// heure et minutes plutôt qu'après) se ferait analyser en avalant le "30" comme une deuxième heure
+// bidon et en jetant la vraie fin de plage dans le texte libre ignoré — mieux vaut que la ligne ne
+// matche pas du tout dans ce cas (échec silencieux mais sûr) que produire un horaire corrompu.
+// withCaptures=true renvoie les groupes (d, mo, h1, m1, h2, m2, reste) utilisés par parseShifts() ;
+// withCaptures=false (sniff, pas besoin d'extraire les valeurs) ne capture rien.
+function shiftLineSource(withCaptures) {
+  const H = withCaptures ? '(\\d{1,2})' : '\\d{1,2}'
+  const M = withCaptures ? '(\\d{0,2})' : '\\d{0,2}'
+  const rest = withCaptures ? '([^\\n]*)' : ''
+  const TIME = `${H}h${M}\\.?(?!\\d)`
+  return `${H}\\/${H}\\s*:\\s*${TIME}\\s*[-–]?\\s*${TIME}${rest}`
+}
+
+export const SHIFT_LINE_RE = new RegExp(shiftLineSource(false), 'i')
+
 // Minutes travaillées d'un shift (gère le passage minuit).
 // Coercition défensive : un shift legacy/corrompu avec start_min/end_min manquant (undefined)
 // donnait NaN ici, qui devient `null` en JSON envoyé à Supabase — rejeté par la contrainte
@@ -68,7 +92,7 @@ export function nightBreakdown(shift, isDayOff) {
 }
 
 export function parseShifts(text) {
-  const re = /(\d{1,2})\/(\d{1,2})\s*:\s*(\d{1,2})h?(\d{0,2})\s*-\s*(\d{1,2})h?(\d{0,2})([^\n]*)/gi
+  const re = new RegExp(shiftLineSource(true), 'gi')
   const out = []
   for (const m of text.matchAll(re)) {
     const [, d, mo, h1, m1, h2, m2, rest] = m
