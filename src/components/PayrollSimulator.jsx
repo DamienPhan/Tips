@@ -9,6 +9,7 @@ const RATE_KEY = 'payroll:hourlyRate'
 const PAY_MODE_KEY = 'payroll:payMode'
 const WEEKLY_BASE_HOURS_KEY = 'payroll:weeklyBaseHours'
 const ABSENCE_DAYS_KEY = 'payroll:absenceDays'
+const COTISATION_RATE_KEY = 'payroll:cotisationRate'
 
 function readAbsenceDays() {
   try { return JSON.parse(localStorage.getItem(ABSENCE_DAYS_KEY)) || {} } catch { return {} }
@@ -45,13 +46,19 @@ export default function PayrollSimulator() {
   const [absenceDraftByMonth, setAbsenceDraftByMonth] = useState(() => draftFromMap(readAbsenceDays()))
   const absenceDraft = absenceDraftByMonth[monthKey] ?? ''
 
+  // Taux forfaitaire de cotisations salariales (voir DEFAULT_RATES.employeeCotisationRate dans
+  // payroll.js) — saisi/affiché en % dans l'UI, stocké en fraction (÷100) côté calcul.
+  const defaultCotisationPct = DEFAULT_RATES.employeeCotisationRate * 100
+  const [cotisationRate, setCotisationRate] = useState(() => (Number(localStorage.getItem(COTISATION_RATE_KEY)) || defaultCotisationPct) / 100)
+  const [cotisationRateDraft, setCotisationRateDraft] = useState(() => String(Number(localStorage.getItem(COTISATION_RATE_KEY)) || defaultCotisationPct).replace('.', ','))
+
   // Précharge jsPDF/xlsx dès l'ouverture de l'onglet : sur Safari iOS / PWA installée, un
   // téléchargement déclenché après un `await import(...)` réseau perd le "geste utilisateur"
   // du clic et échoue silencieusement. En préchargeant ici, l'import est déjà en cache au
   // moment du clic et le déclenchement du fichier reste dans la même activation.
   useEffect(() => { import('jspdf'); import('xlsx') }, [])
 
-  const rates = useMemo(() => ({ ...DEFAULT_RATES, weeklyBaseHours }), [weeklyBaseHours])
+  const rates = useMemo(() => ({ ...DEFAULT_RATES, weeklyBaseHours, employeeCotisationRate: cotisationRate }), [weeklyBaseHours, cotisationRate])
   const results = useMemo(() => computePayroll(shifts, hourlyRate, rates, { payMode, absenceDaysByMonth }),
     [shifts, hourlyRate, rates, payMode, absenceDaysByMonth])
   const current = results.find(r => r.key === monthKey) || results[results.length - 1]
@@ -73,6 +80,13 @@ export default function PayrollSimulator() {
     const n = Number(String(v).replace(',', '.')) || 0
     setWeeklyBaseHours(n)
     localStorage.setItem(WEEKLY_BASE_HOURS_KEY, String(n))
+  }
+
+  function updateCotisationRate(v) {
+    setCotisationRateDraft(v)
+    const pct = Number(String(v).replace(',', '.')) || 0
+    setCotisationRate(pct / 100)
+    localStorage.setItem(COTISATION_RATE_KEY, String(pct))
   }
 
   function updateAbsenceDays(v) {
@@ -125,6 +139,11 @@ export default function PayrollSimulator() {
           onChange={e => updateRate(e.target.value)}
           className="w-full bg-surface-2 rounded-xl px-3.5 py-3 text-base outline-none focus:ring-2 focus:ring-amber/40 mb-3" />
 
+        <label className="text-muted text-xs uppercase tracking-wider mb-1.5 block">Cotisations salariales (%, estimation)</label>
+        <input inputMode="decimal" type="text" value={cotisationRateDraft}
+          onChange={e => updateCotisationRate(e.target.value)}
+          className="w-full bg-surface-2 rounded-xl px-3.5 py-3 text-base outline-none focus:ring-2 focus:ring-amber/40 mb-3" />
+
         {payMode === 'monthly' && (
           <div className="flex gap-3 mb-3">
             <div className="flex-1">
@@ -160,9 +179,17 @@ export default function PayrollSimulator() {
               <span className="font-medium text-sm">Total brut estimé</span>
               <span className="tnum font-display font-bold text-amber text-xl">{current.payroll.grossTotal.toFixed(2)} €</span>
             </div>
+            <div className="flex items-center justify-between py-3 text-sm">
+              <span className="text-muted">Cotisations salariales (est., {(current.payroll.cotisationRate * 100).toFixed(1)}%)</span>
+              <span className="tnum text-error">−{current.payroll.cotisationAmount.toFixed(2)} €</span>
+            </div>
+            <div className="flex items-baseline justify-between pt-3">
+              <span className="font-medium text-sm">Net estimé</span>
+              <span className="tnum font-display font-bold text-synced text-xl">{current.payroll.netTotal.toFixed(2)} €</span>
+            </div>
           </section>
 
-          <p className="text-muted text-xs mb-3">Simulation indicative — hors charges sociales et prélèvement à la source.</p>
+          <p className="text-muted text-xs mb-3">Simulation indicative — cotisations salariales estimées à taux forfaitaire, hors prélèvement à la source.</p>
 
           <div className="flex gap-2">
             <button onClick={() => run('xlsx')} disabled={busy}
