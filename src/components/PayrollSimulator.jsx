@@ -84,7 +84,9 @@ export default function PayrollSimulator() {
 
   function updateCotisationRate(v) {
     setCotisationRateDraft(v)
-    const pct = Number(String(v).replace(',', '.')) || 0
+    // Même clamp que updateAbsenceDays() : un taux négatif rendrait cotisationAmount négatif,
+    // et l'UI/le PDF préfixent déjà un "−" devant le montant affiché (double signe, ex. "−-118.00 €").
+    const pct = Math.max(0, Number(String(v).replace(',', '.')) || 0)
     setCotisationRate(pct / 100)
     localStorage.setItem(COTISATION_RATE_KEY, String(pct))
   }
