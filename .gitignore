@@ -10,3 +10,4 @@ dist-ssr
 !.vscode/extensions.json
 .idea
 Thumbs.db
+.claude/settings.local.json
