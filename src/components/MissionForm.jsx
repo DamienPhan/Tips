@@ -135,10 +135,13 @@ export default function MissionForm({ initial, onClose }) {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <button onClick={() => set('tax_refund', !f.tax_refund)} aria-pressed={f.tax_refund}
-            className={`py-3 rounded-xl text-sm ${f.tax_refund ? 'bg-amber/15 text-amber' : 'bg-surface-2 text-muted'}`}>
-            Détaxe : {f.tax_refund ? 'Oui' : 'Non'}
-          </button>
+          <div>
+            <span className={label}>Détaxe</span>
+            <button onClick={() => set('tax_refund', !f.tax_refund)} aria-pressed={f.tax_refund}
+              className={`w-full py-3 rounded-xl text-sm ${f.tax_refund ? 'bg-amber/15 text-amber' : 'bg-surface-2 text-muted'}`}>
+              {f.tax_refund ? 'Oui' : 'Non'}
+            </button>
+          </div>
           <div>
             <label htmlFor="mf-porters" className={label}>Porteurs</label>
             <input id="mf-porters" inputMode="numeric" type="text" value={f.porter_count} onChange={e => set('porter_count', e.target.value.replace(/\D/g, ''))} className={`${field} tnum`} />
