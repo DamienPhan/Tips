@@ -175,17 +175,17 @@ export default function PayrollSimulator() {
         <>
           <section className="bg-surface rounded-2xl p-4 mb-4 divide-y divide-white/5">
             {payrollRows(current.payroll).map(r => <Row key={r.label} label={r.label} hours={r.hours} amount={r.amount} />)}
-            <div className="flex items-baseline justify-between pt-3">
-              <span className="font-medium text-sm">Total brut estimé</span>
-              <span className="tnum font-display font-bold text-amber text-xl">{current.payroll.grossTotal.toFixed(2)} €</span>
+            <div className="flex items-baseline justify-between gap-3 pt-3">
+              <span className="font-medium text-sm min-w-0">Total brut estimé</span>
+              <span className="tnum font-display font-bold text-amber text-xl shrink-0 whitespace-nowrap">{current.payroll.grossTotal.toFixed(2)} €</span>
             </div>
-            <div className="flex items-center justify-between py-3 text-sm">
-              <span className="text-muted">Cotisations salariales (est., {(current.payroll.cotisationRate * 100).toFixed(1)}%)</span>
-              <span className="tnum text-error">−{current.payroll.cotisationAmount.toFixed(2)} €</span>
+            <div className="flex items-center justify-between gap-3 py-3 text-sm">
+              <span className="text-muted min-w-0">Cotisations salariales (est., {(current.payroll.cotisationRate * 100).toFixed(1)}%)</span>
+              <span className="tnum text-error shrink-0 whitespace-nowrap">−{current.payroll.cotisationAmount.toFixed(2)} €</span>
             </div>
-            <div className="flex items-baseline justify-between pt-3">
-              <span className="font-medium text-sm">Net estimé</span>
-              <span className="tnum font-display font-bold text-synced text-xl">{current.payroll.netTotal.toFixed(2)} €</span>
+            <div className="flex items-baseline justify-between gap-3 pt-3">
+              <span className="font-medium text-sm min-w-0">Net estimé</span>
+              <span className="tnum font-display font-bold text-synced text-xl shrink-0 whitespace-nowrap">{current.payroll.netTotal.toFixed(2)} €</span>
             </div>
           </section>
 
@@ -210,10 +210,10 @@ export default function PayrollSimulator() {
 
 function Row({ label, hours, amount }) {
   return (
-    <div className="flex items-center justify-between py-3 text-sm first:pt-0">
-      <span className="text-[#E6E9EF]">{label}</span>
-      <span className="tnum text-muted mx-3">{fmtHours(hours)}</span>
-      <span className="tnum font-medium">{amount.toFixed(2)} €</span>
+    <div className="flex items-center justify-between gap-3 py-3 text-sm first:pt-0">
+      <span className="text-[#E6E9EF] min-w-0">{label}</span>
+      <span className="tnum text-muted shrink-0 whitespace-nowrap">{fmtHours(hours)}</span>
+      <span className="tnum font-medium shrink-0 whitespace-nowrap">{amount.toFixed(2)} €</span>
     </div>
   )
 }
