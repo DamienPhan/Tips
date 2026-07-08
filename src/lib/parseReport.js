@@ -1,5 +1,13 @@
 import { todayLocal } from './date'
 
+// Motif du champ Booking, source unique partagée entre la détection de contenu (parseImport.js),
+// le découpage multi-bookings (parseReports ci-dessous) et l'extraction de booking_ref
+// (parseReport ci-dessous) — le "#" peut être côté label ("Booking # : 30502", éventuellement collé
+// "Booking# :") ou côté valeur ("Booking : #30502", format actuel de l'outil externe) ; ne dupliquer
+// ce motif nulle part ailleurs, ces trois usages ont déjà divergé une fois par le passé.
+const BOOKING_PATTERN = 'Booking\\s*#?\\s*:\\s*#?\\s*(\\S+)'
+export const BOOKING_FIELD_RE = new RegExp(BOOKING_PATTERN, 'i')
+
 const SAT_MAP = {
   EXCELLENTE: 'EXCELLENTE', EXCELLENT: 'EXCELLENTE',
   BONNE: 'BONNE', BON: 'BONNE',
@@ -46,7 +54,7 @@ function isAffirmative(raw) {
 }
 
 export function parseReports(text) {
-  const matches = [...text.matchAll(/Booking\s*#/gi)]
+  const matches = [...text.matchAll(new RegExp(BOOKING_PATTERN, 'gi'))]
   if (matches.length <= 1) {
     return text.trim() ? [parseReport(text)] : []
   }
@@ -71,7 +79,13 @@ export function parseReport(text) {
     greeter = val(text, 'Greeteur')
   }
 
-  const issueBlock = text.match(/probl[eè]me rencontr[eé]\s*\?\s*([\s\S]*?)(?:\n\s*\d+\.|\n5\.|$)/i)
+  // Pas de `\s*` entre `\?` et le groupe capturé : sinon, quand la section est vide, ce `\s*`
+  // (glouton) avale toutes les lignes vides jusqu'au prochain caractère non-blanc — souvent le "5"
+  // de "5. Ressources" — ce qui empêche le terminateur `\n\s*\d+\.` de matcher juste après (il lui
+  // faut un `\n` en tête), et la capture "déborde" jusqu'à la section suivante. En laissant le `\s*`
+  // initial dans le groupe paresseux lui-même, le terminateur peut matcher dès la position de départ
+  // quand la section est vide, donnant bien une capture vide.
+  const issueBlock = text.match(/probl[eè]me rencontr[eé]\s*\?([\s\S]*?)(?:\n\s*\d+\.|$)/i)
   const issueText = issueBlock ? issueBlock[1].trim() : ''
   const is_no_show = /no\s*show/i.test(issueText)
   const has_issue = issueText.length > 0 && !/^(non|aucun|rien|ras|r\.a\.s|néant|neant|nada)\.?$/i.test(issueText.replace(/\s+/g, ''))
@@ -81,7 +95,10 @@ export function parseReport(text) {
 
   return {
     intervention_date: normDate(val(text, 'Date')),
-    booking_ref: val(text, 'Booking #') || val(text, 'Booking'),
+    // BOOKING_FIELD_RE consomme déjà le "#" quel que soit son côté (label ou valeur) avant le
+    // groupe capturé ; le strip défensif ne fait que nettoyer un "#" qui aurait quand même filtré
+    // (ex. "##"). L'affichage (ImportModal.jsx) préfixe lui-même un "#" devant booking_ref.
+    booking_ref: (text.match(BOOKING_FIELD_RE)?.[1] || '').replace(/^#/, ''),
     client_name,
     greeter,
     booking_mode: normBookingMode(val(text, 'Pré-booking ou Live') || val(text, 'Pre-booking ou Live')),
