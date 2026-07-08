@@ -6,7 +6,13 @@ export const DEFAULT_RATES = {
   overtimeMultiplierHigh: 1.5, // heures sup à partir de la 34e heure
   nightBonusRate: 0.25,        // prime de nuit, en supplément du taux de base
   offWorkedBonusRate: 0.25,    // prime jour OFF travaillé, en supplément du taux de base
-  weeklyBaseHours: 35          // base légale hebdomadaire — mode "Mensualisé" uniquement
+  weeklyBaseHours: 35,         // base légale hebdomadaire — mode "Mensualisé" uniquement
+  // Cotisations salariales : taux forfaitaire, pas un détail poste par poste (santé/retraite/
+  // chômage/CSG-CRDS/mutuelle...) — bien trop spécifique au contrat et à la convention collective
+  // pour être répliqué fiablement ici. Valeur par défaut dérivée d'un vrai bulletin (non-cadre) :
+  // brut 1179.05 € → net avant impôt 906.72 €, soit (1179.05-906.72)/1179.05 ≈ 23.1% de retenues.
+  // Éditable dans le simulateur, à ajuster si le profil (cadre/mutuelle/etc.) diffère.
+  employeeCotisationRate: 0.231
 }
 
 // Calcule la simulation de paie pour un mois (élément retourné par monthlyDetail()).
@@ -57,6 +63,12 @@ export function computeMonthPayroll(month, hourlyRate, rates = DEFAULT_RATES, op
 
   const grossTotal = baseAmount + overtimeLowAmount + overtimeHighAmount + nightBonus + offWorkedBonus
 
+  // Estimation forfaitaire des cotisations salariales sur le brut total (voir le commentaire de
+  // DEFAULT_RATES.employeeCotisationRate) — pas un calcul détaillé, juste une approximation.
+  const cotisationRate = Number(rates.employeeCotisationRate) || 0
+  const cotisationAmount = grossTotal * cotisationRate
+  const netTotal = grossTotal - cotisationAmount
+
   return {
     payMode,
     baseHours, baseAmount,
@@ -64,7 +76,8 @@ export function computeMonthPayroll(month, hourlyRate, rates = DEFAULT_RATES, op
     offWorkedHours, offWorkedBonus,
     overtimeLowHours, overtimeHighHours, overtimeLowAmount, overtimeHighAmount,
     nightHours: total.night, nightBonus,
-    grossTotal
+    grossTotal,
+    cotisationRate, cotisationAmount, netTotal
   }
 }
 

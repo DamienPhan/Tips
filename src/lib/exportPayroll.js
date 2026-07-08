@@ -106,10 +106,11 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate) {
       y += 12
     }
 
-    // Le récapitulatif de paie a besoin d'environ 90mm (titre + en-tête + jusqu'à 4 lignes de
-    // catégorie + note OFF éventuelle + TOTAL + disclaimer) : on repart sur une nouvelle page
-    // plutôt que de le faire chevaucher le bas de la page si le relevé d'heures l'a rempli.
-    if (y + 90 > 290) {
+    // Le récapitulatif de paie a besoin d'environ 110mm (titre + en-tête + jusqu'à 4 lignes de
+    // catégorie + note OFF éventuelle + TOTAL BRUT + cotisations + NET + disclaimer) : on repart
+    // sur une nouvelle page plutôt que de le faire chevaucher le bas de la page si le relevé
+    // d'heures l'a rempli.
+    if (y + 110 > 290) {
       doc.addPage()
       y = 20
     }
@@ -122,6 +123,12 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate) {
     y += 8
 
     const tableTop = y
+    // Les lignes n'ont pas toutes la même hauteur (rowH pour l'en-tête/les catégories, rowH+1 pour
+    // TOTAL BRUT et NET) : on trace les séparateurs horizontaux à partir des positions `y` réellement
+    // atteintes après chaque ligne, plutôt que par un pas fixe qui désaligne la grille dès qu'une
+    // ligne surdimensionnée s'intercale (ce qui s'est produit ici avec l'ajout des lignes cotisation/NET).
+    const rowBottoms = []
+
     // En-tête
     doc.setFillColor(...AMBER_TINT)
     doc.rect(marginX, y, tableW, rowH, 'F')
@@ -131,6 +138,7 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate) {
     doc.text('Heures', colX[1] + colW[1] - 3, y + rowH / 2 + 1.2, { align: 'right' })
     doc.text('Montant', colX[2] + colW[2] - 3, y + rowH / 2 + 1.2, { align: 'right' })
     y += rowH
+    rowBottoms.push(y)
 
     doc.setFont(FONT, 'normal')
     doc.setFontSize(10)
@@ -139,31 +147,49 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate) {
       doc.text(fmtHours(r.hours), colX[1] + colW[1] - 3, y + rowH / 2 + 1.2, { align: 'right' })
       doc.text(eur(r.amount), colX[2] + colW[2] - 3, y + rowH / 2 + 1.2, { align: 'right' })
       y += rowH
+      rowBottoms.push(y)
     })
 
-    // TOTAL
+    // TOTAL BRUT
     doc.setFillColor(...AMBER)
     doc.rect(marginX, y, tableW, rowH + 1, 'F')
     doc.setFont(FONT, 'bold')
     doc.setFontSize(11)
     doc.text('TOTAL BRUT ESTIMÉ', colX[0] + 3, y + (rowH + 1) / 2 + 1.2)
     doc.text(eur(p.grossTotal), colX[2] + colW[2] - 3, y + (rowH + 1) / 2 + 1.2, { align: 'right' })
-    const tableBottom = y + rowH + 1
+    y += rowH + 1
+    rowBottoms.push(y)
 
-    // Grille : contour + séparateurs de colonnes + lignes horizontales
+    // Cotisations salariales (estimation forfaitaire, voir payroll.js) puis NET
+    doc.setFont(FONT, 'normal')
+    doc.setFontSize(10)
+    doc.text(`Cotisations salariales (est., ${(p.cotisationRate * 100).toFixed(1)}%)`, colX[0] + 3, y + rowH / 2 + 1.2)
+    doc.text(`-${eur(p.cotisationAmount)}`, colX[2] + colW[2] - 3, y + rowH / 2 + 1.2, { align: 'right' })
+    y += rowH
+    rowBottoms.push(y)
+
+    doc.setFillColor(...AMBER)
+    doc.rect(marginX, y, tableW, rowH + 1, 'F')
+    doc.setFont(FONT, 'bold')
+    doc.setFontSize(11)
+    doc.text('NET ESTIMÉ', colX[0] + 3, y + (rowH + 1) / 2 + 1.2)
+    doc.text(eur(p.netTotal), colX[2] + colW[2] - 3, y + (rowH + 1) / 2 + 1.2, { align: 'right' })
+    const tableBottom = y + rowH + 1
+    rowBottoms.push(tableBottom)
+
+    // Grille : contour + séparateurs de colonnes + lignes horizontales (une par frontière de ligne
+    // réellement dessinée, hors la dernière qui coïncide avec le bord bas déjà tracé par le rect)
     doc.setDrawColor(180)
     doc.rect(marginX, tableTop, tableW, tableBottom - tableTop)
     doc.line(colX[1], tableTop, colX[1], tableBottom)
     doc.line(colX[2], tableTop, colX[2], tableBottom)
-    for (let ly = tableTop + rowH; ly < tableBottom - 1; ly += rowH) {
-      doc.line(marginX, ly, marginX + tableW, ly)
-    }
+    rowBottoms.slice(0, -1).forEach(ly => doc.line(marginX, ly, marginX + tableW, ly))
 
     y = tableBottom + 10
     doc.setFont(FONT, 'normal')
     doc.setFontSize(8)
     doc.setTextColor(150)
-    doc.text('Simulation indicative — hors charges sociales et prélèvement à la source.', marginX, y)
+    doc.text('Simulation indicative — cotisations salariales estimées à taux forfaitaire, hors prélèvement à la source.', marginX, y)
     doc.setTextColor(0)
   })
 
@@ -199,8 +225,10 @@ export async function exportPayrollXlsx(payrollByMonth, hourlyRate) {
     const catEnd = data.length
     push([])
     const totalRow = push(['TOTAL BRUT ESTIMÉ', '', Number(p.grossTotal.toFixed(2))])
+    const cotisRow = push([`Cotisations salariales (est., ${(p.cotisationRate * 100).toFixed(1)}%)`, '', Number((-p.cotisationAmount).toFixed(2))])
+    const netRow = push(['NET ESTIMÉ', '', Number(p.netTotal.toFixed(2))])
     push([])
-    push(['Simulation indicative — hors charges sociales et prélèvement à la source.'])
+    push(['Simulation indicative — cotisations salariales estimées à taux forfaitaire, hors prélèvement à la source.'])
     push([])
     push(['DÉTAIL DES HEURES'])
     push(SHIFT_TABLE_HEAD)
@@ -219,6 +247,8 @@ export async function exportPayrollXlsx(payrollByMonth, hourlyRate) {
       setFmt(r, 2, EUR_FMT)
     }
     setFmt(totalRow, 2, EUR_FMT)
+    setFmt(cotisRow, 2, EUR_FMT)
+    setFmt(netRow, 2, EUR_FMT)
 
     XLSX.utils.book_append_sheet(wb, ws, m.sheet)
   })
