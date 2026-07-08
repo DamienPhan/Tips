@@ -62,7 +62,7 @@ export default function ImportModal({ onClose, onManual }) {
               Colle un bloc de missions (rapports WhatsApp) ou un relevé d'heures. Le type est détecté automatiquement.
             </p>
             <textarea value={raw} onChange={e => setRaw(e.target.value)} rows={14}
-              placeholder={'Missions :  Booking # : ...\n\nou Horaires :  21/06 : 6h45 - 18h45'}
+              placeholder={'Missions :  Booking : #...\n\nou Horaires :  21/06 : 6h45 - 18h45'}
               className={`${field} resize-none font-mono text-sm`} />
             <button onClick={onManual} className="w-full bg-surface text-muted rounded-xl py-3 text-sm active:bg-surface-2">
               Saisie manuelle
