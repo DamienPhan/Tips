@@ -1,3 +1,5 @@
+import { BASE_SHIFT_MIN, NORMAL_SHIFT_MIN } from './parseShift'
+
 const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 
 // Clôture de paie de l'employeur : SEULES les heures sup et les heures d'un jour OFF travaillé
@@ -44,13 +46,14 @@ export function monthlyDetail(shifts) {
   return [...keys].sort().map(key => {
     const [y, mo] = key.split('-')
     const rows = (calendarMap.get(key) || []).slice().sort((a, b) => (a.shift_date < b.shift_date ? -1 : 1))
-    // Heures normales = heures du shift moins sa part de sup (déjà exclue des heures majorées d'un
-    // jour OFF travaillé, qui comptent en intégralité comme heures normales — la prime jour OFF
-    // s'ajoute par-dessus, voir payroll.js).
+    // Heures normales = un forfait fixe de 7h30 (NORMAL_SHIFT_MIN) par jour travaillé, pas le brut
+    // moins la part sup — vérifié contre le relevé réel de l'utilisateur. Un jour OFF travaillé ne
+    // compte pas du tout ici : ses heures sont entièrement à part (prime jour OFF, voir payroll.js).
     const baseHours = rows.reduce((sum, s) => {
-      const h = Number(s.hours || 0)
-      const ot = s.is_day_off ? 0 : Number(s.overtime_hours || 0)
-      return sum + Math.max(0, h - ot)
+      if (s.is_day_off) return sum
+      const workedMin = Number(s.hours || 0) * 60
+      const normalMin = Math.max(0, Math.min(workedMin, BASE_SHIFT_MIN) - (BASE_SHIFT_MIN - NORMAL_SHIFT_MIN))
+      return sum + normalMin / 60
     }, 0)
     const night = rows.reduce((sum, s) => sum + Number(s.night_hours || 0), 0)
     const nightOvertime = rows.reduce((sum, s) => sum + Number(s.night_overtime_hours || 0), 0)

@@ -39,10 +39,10 @@ export function computeMonthPayroll(month, hourlyRate, rates = DEFAULT_RATES, op
     baseHours = Math.max(0, fullBaseHours - absenceHours)
     baseAmount = fullBaseAmount - absenceAmount
   } else {
-    // total.baseHours est déjà net de la part sup de chaque shift (voir monthlyDetail.js) — un
-    // jour OFF travaillé y compte en intégralité comme heures normales (la prime jour OFF
-    // ci-dessous s'ajoute par-dessus) ; seules les vraies heures sup (jour normal) alimentent le
-    // pool majoré à 25%/50%.
+    // total.baseHours est un forfait de 7h30/jour travaillé, pas les heures réelles moins la part
+    // sup (voir monthlyDetail.js) — un jour OFF travaillé n'y compte pas du tout, ses heures sont
+    // entièrement dans la prime jour OFF ci-dessous ; seules les vraies heures sup (jour normal)
+    // alimentent le pool majoré à 25%/50%.
     baseHours = total.baseHours
     baseAmount = baseHours * hourlyRate
   }

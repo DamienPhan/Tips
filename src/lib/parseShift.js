@@ -1,4 +1,10 @@
 export const BASE_SHIFT_MIN = 510   // 8h30
+// Part "heures normales" d'un jour travaillé pour la paie mensuelle (monthlyDetail.js) : un forfait
+// fixe de 7h30, pas "brut moins la part sup". L'écart avec BASE_SHIFT_MIN (1h) correspond à une pause
+// non payée implicite déjà absorbée par le seuil de déclenchement des heures sup — vérifié contre le
+// relevé réel de l'utilisateur (Normal=7h30 pour chaque jour non-OFF, quelle que soit sa durée, tant
+// qu'elle atteint au moins 8h30 ; un jour OFF travaillé n'a lui aucune valeur "Normal", voir plus bas).
+export const NORMAL_SHIFT_MIN = 450 // 7h30
 export const NIGHT_START = 22 * 60  // 22h00
 export const NIGHT_END = 7 * 60     // 07h00
 
