@@ -145,19 +145,19 @@ export default function PayrollSimulator() {
           className="w-full bg-surface-2 rounded-xl px-3.5 py-3 text-base outline-none focus:ring-2 focus:ring-amber/40 mb-3" />
 
         {payMode === 'monthly' && (
-          <div className="flex gap-3 mb-3">
-            <div className="flex-1">
-              <label className="text-muted text-xs uppercase tracking-wider mb-1.5 block">Base légale (h/semaine)</label>
-              <input inputMode="decimal" type="text" value={weeklyBaseHoursDraft}
-                onChange={e => updateWeeklyBaseHours(e.target.value)}
-                className="w-full bg-surface-2 rounded-xl px-3.5 py-3 text-base outline-none focus:ring-2 focus:ring-amber/40" />
-            </div>
-            <div className="flex-1">
-              <label className="text-muted text-xs uppercase tracking-wider mb-1.5 block">Absence (j, prorata)</label>
-              <input inputMode="decimal" type="text" value={absenceDraft} placeholder="0"
-                onChange={e => updateAbsenceDays(e.target.value)}
-                className="w-full bg-surface-2 rounded-xl px-3.5 py-3 text-base outline-none focus:ring-2 focus:ring-amber/40" />
-            </div>
+          // grid (pas flex) : les deux libellés partagent la ligne 1 et les deux inputs la ligne 2,
+          // pour que la hauteur de chaque ligne s'aligne sur son contenu le plus grand — avec un flex
+          // par colonne indépendant, un libellé qui passe sur 2 lignes ("Base légale (h/semaine)")
+          // décale son input par rapport à celui de la colonne voisine dont le libellé tient sur 1 ligne.
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <label className="text-muted text-xs uppercase tracking-wider mb-1.5">Base légale (h/semaine)</label>
+            <label className="text-muted text-xs uppercase tracking-wider mb-1.5">Absence (j, prorata)</label>
+            <input inputMode="decimal" type="text" value={weeklyBaseHoursDraft}
+              onChange={e => updateWeeklyBaseHours(e.target.value)}
+              className="w-full bg-surface-2 rounded-xl px-3.5 py-3 text-base outline-none focus:ring-2 focus:ring-amber/40" />
+            <input inputMode="decimal" type="text" value={absenceDraft} placeholder="0"
+              onChange={e => updateAbsenceDays(e.target.value)}
+              className="w-full bg-surface-2 rounded-xl px-3.5 py-3 text-base outline-none focus:ring-2 focus:ring-amber/40" />
           </div>
         )}
 
