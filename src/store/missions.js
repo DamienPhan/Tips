@@ -44,11 +44,27 @@ export const useMissions = create((set, get) => ({
     set({ missions: get().missions.filter(m => m.id !== id) })
   },
 
+  // Import en masse (ImportModal, bouton +) : un shift importé pour une date déjà présente
+  // remplace l'existant (même id, données écrasées) plutôt que de créer un doublon — repasser
+  // un relevé corrigé pour une période déjà saisie ne doit pas dupliquer les jours communs.
+  // get().shifts est relu à chaque itération pour que deux dates identiques dans le même import
+  // (cas déjà géré : le second écrase le premier) et un shift tout juste créé dans cette même
+  // boucle soient visibles aux itérations suivantes.
   addShifts: async (shifts) => {
-    const saved = []
-    for (const s of shifts) saved.push(await saveShift({ ...s, id: crypto.randomUUID() }))
-    set({ shifts: [...saved, ...get().shifts] })
-    return saved.length
+    let count = 0
+    for (const s of shifts) {
+      const existing = get().shifts.find(x => x.shift_date === s.shift_date)
+      const record = existing
+        ? await saveShift({ ...existing, ...s, id: existing.id })
+        : await saveShift({ ...s, id: crypto.randomUUID() })
+      set({
+        shifts: existing
+          ? get().shifts.map(x => x.id === record.id ? record : x)
+          : [record, ...get().shifts]
+      })
+      count++
+    }
+    return count
   },
 
   updateShift: async (shift) => {
