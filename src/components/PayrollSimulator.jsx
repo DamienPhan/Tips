@@ -205,8 +205,8 @@ export default function PayrollSimulator() {
             </button>
           </div>
           <button onClick={() => run('pdf-hours')} disabled={busy}
-            className="w-full bg-surface text-muted rounded-xl py-3 text-sm font-medium active:bg-surface-2 mt-2 disabled:opacity-50">
-            {busy === 'pdf-hours' ? '…' : 'PDF — heures seulement'}
+            className="w-full bg-surface-2 text-[#E6E9EF] rounded-xl py-3 text-sm font-medium active:bg-white/10 mt-2 disabled:opacity-50">
+            {busy === 'pdf-hours' ? '…' : 'PDF (heures)'}
           </button>
           {error && <p className="text-error text-xs mt-2">L'export a échoué : {error}</p>}
         </>
