@@ -104,6 +104,7 @@ export default function PayrollSimulator() {
     setError(null)
     try {
       if (kind === 'pdf') await exportPayrollPdf([current], hourlyRate)
+      else if (kind === 'pdf-hours') await exportPayrollPdf([current], hourlyRate, { hoursOnly: true })
       else await exportPayrollXlsx([current], hourlyRate)
     } catch (e) {
       console.error('Export paie échoué', e)
@@ -203,6 +204,10 @@ export default function PayrollSimulator() {
               {busy === 'pdf' ? '…' : 'PDF'}
             </button>
           </div>
+          <button onClick={() => run('pdf-hours')} disabled={busy}
+            className="w-full bg-surface text-muted rounded-xl py-3 text-sm font-medium active:bg-surface-2 mt-2 disabled:opacity-50">
+            {busy === 'pdf-hours' ? '…' : 'PDF — heures seulement'}
+          </button>
           {error && <p className="text-error text-xs mt-2">L'export a échoué : {error}</p>}
         </>
       )}

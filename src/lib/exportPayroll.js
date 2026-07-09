@@ -18,7 +18,10 @@ const AMBER_TINT = [250, 240, 217]
 const ZEBRA_TINT = [250, 246, 235]
 const GREY_LINE = [200, 200, 200]
 
-export async function exportPayrollPdf(payrollByMonth, hourlyRate) {
+// options.hoursOnly : n'exporte que le relevé "Détail des heures" (avec sa ligne Total), sans le
+// récapitulatif de paie — pour un simple relevé d'heures sans les montants, distinct du PDF complet.
+export async function exportPayrollPdf(payrollByMonth, hourlyRate, options = {}) {
+  const hoursOnly = !!options.hoursOnly
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   doc.setFont(FONT, 'normal')
@@ -37,7 +40,7 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate) {
 
     doc.setFont(FONT, 'bold')
     doc.setFontSize(18)
-    doc.text('Simulation de paie', W / 2, y, { align: 'center' })
+    doc.text(hoursOnly ? 'Détail des heures' : 'Simulation de paie', W / 2, y, { align: 'center' })
     y += 4
     doc.setDrawColor(...AMBER)
     doc.setLineWidth(0.8)
@@ -51,7 +54,9 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate) {
     y += 6
     doc.setFontSize(9)
     doc.setTextColor(120)
-    doc.text(`Taux horaire : ${hourlyRate.toFixed(2)} €/h`, W / 2, y, { align: 'center' })
+    // Le taux horaire n'a pas sa place dans un relevé d'heures sans montants ; on garde le même
+    // avancement de `y` dans les deux cas pour que le tableau démarre à la même position.
+    if (!hoursOnly) doc.text(`Taux horaire : ${hourlyRate.toFixed(2)} €/h`, W / 2, y, { align: 'center' })
     doc.setTextColor(0)
     y += 12
 
@@ -114,7 +119,16 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate) {
 
       closeDetailChunk()
       y += 12
+    } else if (hoursOnly) {
+      doc.setFont(FONT, 'normal')
+      doc.setFontSize(10)
+      doc.setTextColor(120)
+      doc.text('Aucune heure enregistrée pour ce mois.', marginX, y)
+      doc.setTextColor(0)
+      y += 10
     }
+
+    if (hoursOnly) return // pas de récapitulatif de paie dans ce mode
 
     // Le récapitulatif de paie a besoin d'environ 110mm (titre + en-tête + jusqu'à 4 lignes de
     // catégorie + note OFF éventuelle + TOTAL BRUT + cotisations + NET + disclaimer) : on repart
@@ -203,7 +217,8 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate) {
     doc.setTextColor(0)
   })
 
-  doc.save(`simulation-paie-${payrollByMonth[0]?.key || todayLocal().slice(0, 7)}.pdf`)
+  const suffix = payrollByMonth[0]?.key || todayLocal().slice(0, 7)
+  doc.save(hoursOnly ? `detail-heures-${suffix}.pdf` : `simulation-paie-${suffix}.pdf`)
 }
 
 // La build xlsx installée (community edition) ignore silencieusement tout style de cellule
