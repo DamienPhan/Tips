@@ -220,7 +220,7 @@ function Row({ label, hours, amount }) {
     <div className="flex items-center justify-between gap-3 py-3 text-sm first:pt-0">
       <span className="text-[#E6E9EF] min-w-0">{label}</span>
       <span className="tnum text-muted shrink-0 whitespace-nowrap">{fmtHours(hours)}</span>
-      <span className="tnum font-medium shrink-0 whitespace-nowrap">{amount.toFixed(2)} €</span>
+      <span className="tnum font-medium shrink-0 whitespace-nowrap">{amount == null ? '—' : `${amount.toFixed(2)} €`}</span>
     </div>
   )
 }

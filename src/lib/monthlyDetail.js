@@ -24,9 +24,11 @@ function payrollCutoffMonthKey(dateStr) {
 // - les heures sup et les heures de jour OFF travaillé du total : mois de paie (coupure au 25).
 // Un shift daté du 27 juin par ex. apparaît dans le relevé de juin avec ses heures normales, mais
 // sa part d'heures sup rejoint le total du bulletin de juillet, pas celui de juin.
+// `total.overtimeCarriedIn` isole justement cette part reportée (sous-ensemble de `total.overtime`,
+// pas un total à part) — sert uniquement à l'affichage informatif de payrollRows(), voir payroll.js.
 export function monthlyDetail(shifts) {
   const calendarMap = new Map() // mois calendaire -> shifts (relevé, heures normales/nuit)
-  const cutoffMap = new Map()   // mois de paie -> { overtime, offWorked }
+  const cutoffMap = new Map()   // mois de paie -> { overtime, overtimeCarriedIn, offWorked }
 
   for (const s of shifts) {
     if (!s.shift_date) continue // ligne corrompue (date manquante) : ignorée plutôt que de faire échouer tout l'export
@@ -35,11 +37,19 @@ export function monthlyDetail(shifts) {
     calendarMap.get(calKey).push(s)
 
     const cutKey = payrollCutoffMonthKey(s.shift_date)
-    if (!cutoffMap.has(cutKey)) cutoffMap.set(cutKey, { overtime: 0, offWorked: 0 })
+    if (!cutoffMap.has(cutKey)) cutoffMap.set(cutKey, { overtime: 0, overtimeCarriedIn: 0, offWorked: 0 })
     const bucket = cutoffMap.get(cutKey)
     const otHours = Number(s.overtime_hours || 0)
-    if (s.is_day_off) bucket.offWorked += otHours
-    else bucket.overtime += otHours
+    if (s.is_day_off) {
+      bucket.offWorked += otHours
+    } else {
+      bucket.overtime += otHours
+      // cutKey ne matche le mois calendaire du shift que pour les jours 1-25 (voir
+      // payrollCutoffMonthKey) : si les deux diffèrent, ce shift est daté du 26-fin du mois
+      // calendaire précédent et sa part sup est reportée dans le bulletin de cutKey — on isole
+      // ce sous-total pour l'afficher séparément (voir total.overtimeCarriedIn plus bas).
+      if (cutKey !== calKey) bucket.overtimeCarriedIn += otHours
+    }
   }
 
   const keys = new Set([...calendarMap.keys(), ...cutoffMap.keys()])
@@ -57,13 +67,13 @@ export function monthlyDetail(shifts) {
     }, 0)
     const night = rows.reduce((sum, s) => sum + Number(s.night_hours || 0), 0)
     const nightOvertime = rows.reduce((sum, s) => sum + Number(s.night_overtime_hours || 0), 0)
-    const cutoff = cutoffMap.get(key) || { overtime: 0, offWorked: 0 }
+    const cutoff = cutoffMap.get(key) || { overtime: 0, overtimeCarriedIn: 0, offWorked: 0 }
     return {
       key,
       label: `${MONTHS[+mo - 1]} ${y}`,
       sheet: `${MONTHS[+mo - 1].slice(0, 4)} ${y}`,
       rows,
-      total: { baseHours, overtime: cutoff.overtime, offWorked: cutoff.offWorked, night, nightOvertime }
+      total: { baseHours, overtime: cutoff.overtime, overtimeCarriedIn: cutoff.overtimeCarriedIn, offWorked: cutoff.offWorked, night, nightOvertime }
     }
   })
 }

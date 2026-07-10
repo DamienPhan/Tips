@@ -75,6 +75,7 @@ export function computeMonthPayroll(month, hourlyRate, rates = DEFAULT_RATES, op
     fullBaseHours, fullBaseAmount, absenceDays, absenceHours, absenceAmount,
     offWorkedHours, offWorkedBonus,
     overtimeLowHours, overtimeHighHours, overtimeLowAmount, overtimeHighAmount,
+    overtimeCarriedInHours: total.overtimeCarriedIn,
     nightHours: total.night, nightBonus,
     grossTotal,
     cotisationRate, cotisationAmount, netTotal
@@ -109,6 +110,16 @@ export function payrollRows(p) {
     }
   } else {
     rows.push({ label: 'Heures normales', hours: p.baseHours, amount: p.baseAmount })
+  }
+  // Informative uniquement : ce sous-total est déjà compris dans overtimeLowHours/overtimeHighHours
+  // ci-dessous (voir monthlyDetail.js), donc pas de montant propre — l'ajouter en aurait doublé le
+  // paiement dans TOTAL BRUT ESTIMÉ, qui reste calculé à partir de grossTotal, pas d'une somme des
+  // lignes affichées ici. Le libellé précise "dont" explicitement : sans ça, cette ligne a exactement
+  // le même rendu (Row, PDF, Excel) que les lignes qui s'additionnent réellement juste en dessous —
+  // un lecteur comparant à un vrai bulletin pourrait sinon lire les heures comme un ajout et non
+  // comme un sous-total déjà inclus, et remonter un faux écart.
+  if (p.overtimeCarriedInHours > 0) {
+    rows.push({ label: 'Dont heures sup. du mois dernier (déjà incluses ci-dessous)', hours: p.overtimeCarriedInHours, amount: null })
   }
   rows.push(
     { label: "Heures sup jusqu'à 33h (+25%)", hours: p.overtimeLowHours, amount: p.overtimeLowAmount },
