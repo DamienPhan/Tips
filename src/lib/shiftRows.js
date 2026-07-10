@@ -34,9 +34,18 @@ export function shiftRowCells(s) {
 
 // Ligne de totaux du tableau détail des heures — mêmes colonnes que shiftRowCells(), somme des
 // heures de chaque colonne numérique (Durée/Sup/OFF trav./Nuit/Sup nuit) sur tous les shifts du mois.
-export function shiftTotalsRow(rows) {
+//
+// `overtimeTotals` (optionnel, { overtime, offWorked }) permet d'imposer les colonnes Sup/OFF trav.
+// plutôt que de les sommer depuis `rows` — nécessaire quand `rows` ne contient QUE le mois calendaire
+// réel (Durée/Nuit/Sup nuit doivent rester scopés à ce mois, voir monthlyDetail.js) mais que la
+// colonne Sup/OFF trav. affichée doit refléter le mois de paie (coupure au 25, report inclus/exclu) —
+// passer directement les totaux déjà corrects de computeMonthPayroll() (total.overtime/total.offWorked)
+// évite de resommer une liste de shifts qui mélangerait les deux mois et fausserait Durée/Nuit au passage.
+export function shiftTotalsRow(rows, overtimeTotals) {
   const sum = key => rows.reduce((acc, s) => acc + Number(s[key] || 0), 0)
-  const sumOvertime = rows.reduce((acc, s) => acc + (s.is_day_off ? 0 : Number(s.overtime_hours || 0)), 0)
-  const sumOffWorked = rows.reduce((acc, s) => acc + (s.is_day_off ? Number(s.overtime_hours || 0) : 0), 0)
+  const sumOvertime = overtimeTotals ? overtimeTotals.overtime
+    : rows.reduce((acc, s) => acc + (s.is_day_off ? 0 : Number(s.overtime_hours || 0)), 0)
+  const sumOffWorked = overtimeTotals ? overtimeTotals.offWorked
+    : rows.reduce((acc, s) => acc + (s.is_day_off ? Number(s.overtime_hours || 0) : 0), 0)
   return ['', '', 'Total', fmtHours(sum('hours')), fmtHours(sumOvertime), fmtHours(sumOffWorked), fmtHours(sum('night_hours')), fmtHours(sum('night_overtime_hours'))]
 }

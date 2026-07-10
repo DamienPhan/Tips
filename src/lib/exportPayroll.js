@@ -139,13 +139,17 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate, options = {})
       ;(m.rows || []).forEach(drawRow)
 
       // Ligne de totaux : fond distinct + gras, même si elle prend une septième colonne (Date/Jour
-      // vides, "Total" dans la colonne Horaires) plutôt que d'ajouter une colonne dédiée. Calculée
-      // sur allDetailRows (mois en cours + report) pour que ce total corresponde bien à ce qui est
-      // effectivement listé au-dessus, report inclus.
+      // vides, "Total" dans la colonne Horaires) plutôt que d'ajouter une colonne dédiée. Durée/Nuit/
+      // Sup nuit restent sommées sur m.rows seul (mois calendaire, comme total.baseHours/night dans
+      // monthlyDetail.js) — sommer sur allDetailRows doublerait les heures/nuit d'un shift reporté
+      // (déjà comptées dans le total du mois précédent) et désynchroniserait ce total de la ligne
+      // "Prime de nuit" du récapitulatif juste en dessous. Sup/OFF trav. viennent en revanche
+      // directement de p (total.overtime/total.offWorked, mois de paie) plutôt que d'une somme des
+      // lignes affichées, pour rester exactement égales aux heures sup/jour OFF du récapitulatif.
       doc.setFillColor(...AMBER_TINT)
       doc.rect(marginX, y - 4.5, detailW, 6, 'F')
       doc.setFont(FONT, 'bold')
-      shiftTotalsRow(allDetailRows).forEach((c, i) => doc.text(String(c), detailX[i], y))
+      shiftTotalsRow(m.rows || [], { overtime: p.overtimeLowHours + p.overtimeHighHours, offWorked: p.offWorkedHours }).forEach((c, i) => doc.text(String(c), detailX[i], y))
       doc.setFont(FONT, 'normal')
       y += 6
 
@@ -299,8 +303,11 @@ export async function exportPayrollXlsx(payrollByMonth, hourlyRate) {
       if (m.rows?.length) push([`${m.label} :`])
     }
     ;(m.rows || []).forEach(s => push(shiftRowCells(s)))
-    const allDetailRows = [...carriedInRows, ...(m.rows || [])]
-    if (allDetailRows.length) push(shiftTotalsRow(allDetailRows))
+    // Durée/Nuit/Sup nuit sommées sur m.rows seul, Sup/OFF trav. imposées depuis p (total.overtime/
+    // total.offWorked, mois de paie) — même raison que dans exportPayrollPdf, voir son commentaire.
+    if (carriedInRows.length || m.rows?.length) {
+      push(shiftTotalsRow(m.rows || [], { overtime: p.overtimeLowHours + p.overtimeHighHours, offWorked: p.offWorkedHours }))
+    }
 
     const ws = XLSX.utils.aoa_to_sheet(data)
     ws['!cols'] = [{ wch: 50 }, { wch: 11 }, { wch: 16 }, { wch: 8 }, { wch: 8 }, { wch: 11 }, { wch: 8 }, { wch: 10 }]
