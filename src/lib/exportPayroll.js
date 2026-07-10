@@ -3,7 +3,9 @@ import { fmtHours } from './parseShift'
 import { payrollRows } from './payroll'
 import { SHIFT_TABLE_HEAD, shiftRowCells, shiftTotalsRow } from './shiftRows'
 
-function eur(n) { return `${Number(n || 0).toFixed(2)} €` }
+// n === null (voir la ligne informative "Heures supplémentaires du mois dernier" dans payrollRows())
+// n'a délibérément pas de montant propre — distinct de 0 €, qui reste un montant réel affiché normalement.
+function eur(n) { return n == null ? '—' : `${Number(n).toFixed(2)} €` }
 
 // Helvetica explicite partout (jamais `undefined` comme nom de police) : passer `undefined` à
 // setFont() est censé "garder la police courante", mais selon l'état interne de jsPDF ça peut
@@ -246,7 +248,7 @@ export async function exportPayrollXlsx(payrollByMonth, hourlyRate) {
     push(['DÉTAIL DE LA RÉMUNÉRATION'])
     push(['Catégorie', 'Heures', 'Montant (€)'])
     const catStart = data.length
-    rows.forEach(r => push([r.label, Number(r.hours.toFixed(2)), Number(r.amount.toFixed(2))]))
+    rows.forEach(r => push([r.label, Number(r.hours.toFixed(2)), r.amount == null ? '' : Number(r.amount.toFixed(2))]))
     const catEnd = data.length
     push([])
     const totalRow = push(['TOTAL BRUT ESTIMÉ', '', Number(p.grossTotal.toFixed(2))])
