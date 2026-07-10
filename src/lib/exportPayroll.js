@@ -67,7 +67,9 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate, options = {})
     // premier, avant le récapitulatif de paie.
     const detailX = [14, 38, 56, 92, 110, 130, 154, 176]
     const detailW = W - 28
-    if (m.rows?.length) {
+    const carriedInRows = m.carriedInRows || []
+    const allDetailRows = [...carriedInRows, ...(m.rows || [])]
+    if (allDetailRows.length) {
       doc.setFillColor(...AMBER)
       doc.rect(marginX, y - 4, 1.2, 5, 'F')
       doc.setFont(FONT, 'bold')
@@ -92,9 +94,27 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate, options = {})
         doc.setDrawColor(...GREY_LINE)
         doc.rect(marginX, chunkTop, detailW, y - chunkTop)
       }
-
-      drawDetailHeader()
-      m.rows.forEach(s => {
+      // Étiquette italique introduisant les shifts du 26-fin du mois précédent dont la part
+      // sup est reportée dans le bulletin de ce mois (voir monthlyDetail.js/payrollCutoffMonthKey)
+      // — sans elle, ces lignes datées du mois précédent se confondraient avec le relevé du mois
+      // en cours et sembleraient être une erreur plutôt qu'un report intentionnel.
+      const drawSectionLabel = text => {
+        doc.setFont(FONT, 'italic')
+        doc.setFontSize(7.5)
+        doc.setTextColor(120)
+        doc.text(text, detailX[0], y)
+        doc.setTextColor(0)
+        doc.setFont(FONT, 'normal')
+        doc.setFontSize(8.5)
+        y += 5
+        if (y > 280) {
+          closeDetailChunk()
+          doc.addPage()
+          y = 20
+          drawDetailHeader()
+        }
+      }
+      const drawRow = s => {
         if (zebraIdx % 2 === 1) {
           doc.setFillColor(...ZEBRA_TINT)
           doc.rect(marginX, y - 4.5, detailW, 6, 'F')
@@ -108,14 +128,24 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate, options = {})
           y = 20
           drawDetailHeader()
         }
-      })
+      }
+
+      drawDetailHeader()
+      if (carriedInRows.length) {
+        drawSectionLabel('Report du mois précédent (heures sup après le 25) :')
+        carriedInRows.forEach(drawRow)
+        if (m.rows?.length) drawSectionLabel(`${m.label} :`)
+      }
+      ;(m.rows || []).forEach(drawRow)
 
       // Ligne de totaux : fond distinct + gras, même si elle prend une septième colonne (Date/Jour
-      // vides, "Total" dans la colonne Horaires) plutôt que d'ajouter une colonne dédiée.
+      // vides, "Total" dans la colonne Horaires) plutôt que d'ajouter une colonne dédiée. Calculée
+      // sur allDetailRows (mois en cours + report) pour que ce total corresponde bien à ce qui est
+      // effectivement listé au-dessus, report inclus.
       doc.setFillColor(...AMBER_TINT)
       doc.rect(marginX, y - 4.5, detailW, 6, 'F')
       doc.setFont(FONT, 'bold')
-      shiftTotalsRow(m.rows).forEach((c, i) => doc.text(String(c), detailX[i], y))
+      shiftTotalsRow(allDetailRows).forEach((c, i) => doc.text(String(c), detailX[i], y))
       doc.setFont(FONT, 'normal')
       y += 6
 
@@ -259,8 +289,18 @@ export async function exportPayrollXlsx(payrollByMonth, hourlyRate) {
     push([])
     push(['DÉTAIL DES HEURES'])
     push(SHIFT_TABLE_HEAD)
+    const carriedInRows = m.carriedInRows || []
+    // Shifts du 26-fin du mois précédent dont la part sup est reportée dans ce bulletin (voir
+    // monthlyDetail.js) — même logique et même étiquette que dans le PDF, pour que les deux
+    // exports restent cohérents l'un avec l'autre sur ce report.
+    if (carriedInRows.length) {
+      push(['Report du mois précédent (heures sup après le 25) :'])
+      carriedInRows.forEach(s => push(shiftRowCells(s)))
+      if (m.rows?.length) push([`${m.label} :`])
+    }
     ;(m.rows || []).forEach(s => push(shiftRowCells(s)))
-    if (m.rows?.length) push(shiftTotalsRow(m.rows))
+    const allDetailRows = [...carriedInRows, ...(m.rows || [])]
+    if (allDetailRows.length) push(shiftTotalsRow(allDetailRows))
 
     const ws = XLSX.utils.aoa_to_sheet(data)
     ws['!cols'] = [{ wch: 50 }, { wch: 11 }, { wch: 16 }, { wch: 8 }, { wch: 8 }, { wch: 11 }, { wch: 8 }, { wch: 10 }]

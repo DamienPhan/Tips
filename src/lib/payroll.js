@@ -92,6 +92,7 @@ export function computePayroll(shifts, hourlyRate, rates = DEFAULT_RATES, option
     label: m.label,
     sheet: m.sheet, // nom d'onglet court ("Juil 2026"), pour l'export Excel
     rows: m.rows, // détail jour par jour, pour le relevé d'heures inclus dans les exports paie
+    carriedInRows: m.carriedInRows, // shifts du 26-fin du mois précédent dont la part sup est reportée ici (voir monthlyDetail.js)
     payroll: computeMonthPayroll(m, hourlyRate, rates, { payMode: options.payMode, absenceDays: absenceDaysByMonth[m.key] })
   }))
 }
