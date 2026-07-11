@@ -34,7 +34,7 @@ function estimateHoursOnlyBottom(m) {
   const allDetailRows = [...carriedInRows, ...(m.rows || [])]
   let y = 50
   if (allDetailRows.length) {
-    y += 8 + 7 // titre "Détail des heures" + en-tête du tableau
+    y += 8 + 7 + 7 // titre "Détail des heures" + note "Sup : pause déjà retirée" + en-tête du tableau
     if (carriedInRows.length) {
       y += 5 + 6 * carriedInRows.length // étiquette "Report du mois précédent" + ses lignes
       if (ownCountedRows.length) y += 5 // étiquette du mois propre
@@ -129,6 +129,19 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate, options = {})
       doc.setFontSize(12)
       doc.text('Détail des heures', marginX + 4, y)
       y += 8
+
+      // La colonne Sup ne compte que les heures au-delà de 8h30 (BASE_SHIFT_MIN, voir
+      // parseShift.js) : la pause d'1h qui sépare ce seuil des 7h30 d'"heures normales" est donc
+      // déjà retirée avant que les heures sup ne commencent à être comptées ici — précisé pour ne
+      // pas laisser croire que la pause a été oubliée quand la colonne Sup paraît plus basse
+      // qu'attendu pour un shift donné.
+      doc.setFont(FONT, 'italic')
+      doc.setFontSize(7.5)
+      doc.setTextColor(120)
+      doc.text('Sup : heure de pause (1h) déjà retirée du calcul.', marginX + 4, y)
+      doc.setTextColor(0)
+      doc.setFont(FONT, 'normal')
+      y += 7
 
       let zebraIdx = 0
       let chunkTop = 0
@@ -353,6 +366,7 @@ export async function exportPayrollXlsx(payrollByMonth, hourlyRate) {
     push(['Simulation indicative — cotisations salariales estimées à taux forfaitaire, hors prélèvement à la source.'])
     push([])
     push(['DÉTAIL DES HEURES'])
+    push(['Sup : heure de pause (1h) déjà retirée du calcul.'])
     push(SHIFT_TABLE_HEAD)
     // carriedInRows/carriedOutRows/ownCountedRows/cutoffRows sont précalculés par monthlyDetail() —
     // même source que exportPayrollPdf, voir son commentaire, pour que les deux exports restent

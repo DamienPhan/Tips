@@ -24,8 +24,9 @@ function payrollCutoffMonthKey(dateStr) {
 // - les heures sup et les heures de jour OFF travaillé du total : mois de paie (coupure au 25).
 // Un shift daté du 27 juin par ex. apparaît dans le relevé de juin avec ses heures normales, mais
 // sa part d'heures sup rejoint le total du bulletin de juillet, pas celui de juin.
-// `total.overtimeCarriedIn` isole justement cette part reportée (sous-ensemble de `total.overtime`,
-// pas un total à part) — sert à l'affichage informatif de payrollRows() (voir payroll.js) et,
+// `total.overtimeCarriedIn` isole justement cette part reportée (heures sup ET jour OFF confondues,
+// puisque payroll.js les fusionne dans le même pool sup — pas un total à part) — sert à l'affichage
+// informatif de payrollRows() (voir payroll.js) et,
 // avec les shifts sources eux-mêmes (`carriedInRows` ci-dessous), à les faire apparaître dans le
 // tableau "Détail des heures" du mois de paie où leurs heures sup sont effectivement comptées,
 // pas seulement dans celui du mois calendaire où ils sont datés. `carriedOutRows` est le symétrique
@@ -36,12 +37,41 @@ function carriesOver(s) {
   return Number(s.overtime_hours || 0) > 0
 }
 
+// Un `shift_date` ne devrait avoir qu'un seul shift — toute la logique de l'app le suppose
+// (isRestDay, addShifts() qui écrase par date, etc.). Un doublon peut malgré tout apparaître (pas de
+// contrainte d'unicité côté serveur sur shift_date, donc une course entre deux appareils/onglets
+// hors-ligne créant chacun un shift pour la même date peut produire deux lignes distinctes qui
+// syncent séparément) : sans dédup ici, un jour dupliqué double ses heures dans TOUS les totaux
+// (normales, sup, nuit...), pas seulement dans le relevé "Détail des heures" où le doublon a été
+// repéré. On garde le shift le plus récemment modifié (`updated_at`) par date plutôt que de sommer
+// les deux, puisque le doublon ne représente pas deux vraies périodes de travail distinctes.
+function dedupeByDate(shifts) {
+  const byDate = new Map()
+  for (const s of shifts) {
+    if (!s.shift_date) continue
+    const existing = byDate.get(s.shift_date)
+    if (!existing) { byDate.set(s.shift_date, s); continue }
+    const newTime = new Date(s.updated_at || 0).getTime()
+    const existingTime = new Date(existing.updated_at || 0).getTime()
+    // Un `existing.updated_at` invalide (legacy/corrompu) donne un NaN qui perd TOUTE comparaison
+    // `>=` (NaN >= x est toujours false) — sans ce garde-fou, une ligne à la date corrompue une fois
+    // choisie comme "existing" ne pourrait plus jamais être remplacée, même par un doublon valide et
+    // réellement plus récent (bug trouvé en review). `Number.isNaN(existingTime)` fait perdre
+    // systématiquement une date invalide face à n'importe quel concurrent, plutôt que de la figer.
+    if (Number.isNaN(existingTime) || newTime >= existingTime) {
+      byDate.set(s.shift_date, s)
+    }
+  }
+  return [...byDate.values()]
+}
+
 export function monthlyDetail(shifts) {
+  shifts = dedupeByDate(shifts)
   const calendarMap = new Map() // mois calendaire -> shifts (relevé, heures normales/nuit)
   const cutoffMap = new Map()   // mois de paie -> { overtime, overtimeCarriedIn, offWorked, carriedInRows }
 
   for (const s of shifts) {
-    if (!s.shift_date) continue // ligne corrompue (date manquante) : ignorée plutôt que de faire échouer tout l'export
+    // dedupeByDate() ci-dessus a déjà écarté les lignes corrompues (date manquante) avant d'atteindre cette boucle.
     const calKey = s.shift_date.slice(0, 7)
     if (!calendarMap.has(calKey)) calendarMap.set(calKey, [])
     calendarMap.get(calKey).push(s)
@@ -56,14 +86,15 @@ export function monthlyDetail(shifts) {
     // cutKey ne matche le mois calendaire du shift que pour les jours 1-25 (voir
     // payrollCutoffMonthKey) : si les deux diffèrent, ce shift est daté du 26-fin du mois calendaire
     // précédent et sa majoration (sup normale OU jour OFF travaillé, les deux suivent la même
-    // coupure) est reportée dans le bulletin de cutKey — on isole ce sous-total (overtimeCarriedIn,
-    // uniquement pour les heures sup, seule catégorie affichée en ligne informative dans
-    // payrollRows()) et on garde systématiquement le shift source (is_day_off ou non) pour l'afficher
-    // dans le relevé "Détail des heures" du mois de paie où sa majoration compte réellement — sans
-    // ça, un jour OFF travaillé reporté n'apparaissait dans AUCUN tableau tout en générant une prime
-    // avec un montant dans le récapitulatif (bug trouvé en review).
+    // coupure ET rejoignent le même pool sup côté paie, voir payroll.js) est reportée dans le
+    // bulletin de cutKey — on isole ce sous-total (overtimeCarriedIn, is_day_off inclus puisque les
+    // deux alimentent désormais le même pool sup pour la ligne informative "Dont..." de
+    // payrollRows()) et on garde systématiquement le shift source pour l'afficher dans le relevé
+    // "Détail des heures" du mois de paie où sa majoration compte réellement — sans ça, un jour OFF
+    // travaillé reporté n'apparaissait dans AUCUN tableau tout en générant une prime avec un montant
+    // dans le récapitulatif (bug trouvé en review).
     if (cutKey !== calKey && carriesOver(s)) {
-      if (!s.is_day_off) bucket.overtimeCarriedIn += otHours
+      bucket.overtimeCarriedIn += otHours
       bucket.carriedInRows.push(s)
     }
   }
@@ -79,7 +110,7 @@ export function monthlyDetail(shifts) {
     const rows = (calendarMap.get(key) || []).filter(s => !isRestDay(s)).sort((a, b) => (a.shift_date < b.shift_date ? -1 : 1))
     // Heures normales = un forfait fixe de 7h30 (NORMAL_SHIFT_MIN) par jour travaillé, pas le brut
     // moins la part sup — vérifié contre le relevé réel de l'utilisateur. Un jour OFF travaillé ne
-    // compte pas du tout ici : ses heures sont entièrement à part (prime jour OFF, voir payroll.js).
+    // compte pas du tout ici : ses heures rejoignent entièrement le pool sup (voir payroll.js).
     const baseHours = rows.reduce((sum, s) => {
       if (s.is_day_off) return sum
       const workedMin = Number(s.hours || 0) * 60
