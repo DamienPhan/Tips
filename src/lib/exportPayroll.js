@@ -67,7 +67,15 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate, options = {})
     // premier, avant le récapitulatif de paie.
     const detailX = [14, 38, 56, 92, 110, 130, 154, 176]
     const detailW = W - 28
-    if (m.rows?.length) {
+    // carriedInRows/carriedOutRows/ownCountedRows/cutoffRows sont précalculés par monthlyDetail()
+    // (voir son commentaire) plutôt que recalculés ici — exportPayrollXlsx en a besoin à l'identique,
+    // pour que les deux exports ne puissent jamais diverger l'un de l'autre sur ce report.
+    const carriedInRows = m.carriedInRows || []
+    const carriedOutRows = m.carriedOutRows || []
+    const ownCountedRows = m.ownCountedRows || []
+    const cutoffRows = m.cutoffRows || []
+    const allDetailRows = [...carriedInRows, ...(m.rows || [])]
+    if (allDetailRows.length) {
       doc.setFillColor(...AMBER)
       doc.rect(marginX, y - 4, 1.2, 5, 'F')
       doc.setFont(FONT, 'bold')
@@ -92,9 +100,28 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate, options = {})
         doc.setDrawColor(...GREY_LINE)
         doc.rect(marginX, chunkTop, detailW, y - chunkTop)
       }
-
-      drawDetailHeader()
-      m.rows.forEach(s => {
+      // Étiquette italique introduisant les shifts du 26-fin du mois précédent/reportés au mois
+      // suivant dont la majoration (sup ou jour OFF) est comptée dans un autre bulletin que celui de
+      // leur propre mois calendaire (voir monthlyDetail.js/payrollCutoffMonthKey) — sans elle, ces
+      // lignes se confondraient avec le relevé normal et sembleraient être une erreur plutôt qu'un
+      // report intentionnel.
+      const drawSectionLabel = text => {
+        doc.setFont(FONT, 'italic')
+        doc.setFontSize(7.5)
+        doc.setTextColor(120)
+        doc.text(text, detailX[0], y)
+        doc.setTextColor(0)
+        doc.setFont(FONT, 'normal')
+        doc.setFontSize(8.5)
+        y += 5
+        if (y > 280) {
+          closeDetailChunk()
+          doc.addPage()
+          y = 20
+          drawDetailHeader()
+        }
+      }
+      const drawRow = s => {
         if (zebraIdx % 2 === 1) {
           doc.setFillColor(...ZEBRA_TINT)
           doc.rect(marginX, y - 4.5, detailW, 6, 'F')
@@ -108,14 +135,35 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate, options = {})
           y = 20
           drawDetailHeader()
         }
-      })
+      }
+
+      drawDetailHeader()
+      if (carriedInRows.length) {
+        drawSectionLabel('Report du mois précédent (après le 25) :')
+        carriedInRows.forEach(drawRow)
+        if (ownCountedRows.length) drawSectionLabel(`${m.label} :`)
+      }
+      ownCountedRows.forEach(drawRow)
+      if (carriedOutRows.length) {
+        drawSectionLabel('Reporté au mois prochain (après le 25) :')
+        carriedOutRows.forEach(drawRow)
+      }
 
       // Ligne de totaux : fond distinct + gras, même si elle prend une septième colonne (Date/Jour
-      // vides, "Total" dans la colonne Horaires) plutôt que d'ajouter une colonne dédiée.
+      // vides, "Total" dans la colonne Horaires) plutôt que d'ajouter une colonne dédiée. Durée/Nuit/
+      // Sup nuit restent sommées sur m.rows en entier (mois calendaire complet, y compris les shifts
+      // reportés au mois suivant — leur durée/nuit restent comptées ce mois-ci, voir monthlyDetail.js).
+      // Sup/OFF trav. sont sommées sur `cutoffRows` (carriedInRows + ownCountedRows), l'ensemble exact
+      // des lignes visiblement affichées ci-dessus dont la majoration compte dans ce bulletin — et non
+      // imposées depuis p.overtimeLowHours+overtimeHighHours/p.offWorkedHours comme avant : ces deux
+      // valeurs sont mathématiquement égales, mais sommer les lignes réellement affichées garantit
+      // que ce total ne peut jamais diverger silencieusement de ce que le lecteur voit au-dessus (bug
+      // trouvé en review : un shift affiché sous "Reporté au mois prochain" restait compté dans le
+      // total imposé, et un jour OFF reporté n'avait aucune ligne nulle part pour justifier sa prime).
       doc.setFillColor(...AMBER_TINT)
       doc.rect(marginX, y - 4.5, detailW, 6, 'F')
       doc.setFont(FONT, 'bold')
-      shiftTotalsRow(m.rows).forEach((c, i) => doc.text(String(c), detailX[i], y))
+      shiftTotalsRow(m.rows || [], cutoffRows).forEach((c, i) => doc.text(String(c), detailX[i], y))
       doc.setFont(FONT, 'normal')
       y += 6
 
@@ -259,8 +307,29 @@ export async function exportPayrollXlsx(payrollByMonth, hourlyRate) {
     push([])
     push(['DÉTAIL DES HEURES'])
     push(SHIFT_TABLE_HEAD)
-    ;(m.rows || []).forEach(s => push(shiftRowCells(s)))
-    if (m.rows?.length) push(shiftTotalsRow(m.rows))
+    // carriedInRows/carriedOutRows/ownCountedRows/cutoffRows sont précalculés par monthlyDetail() —
+    // même source que exportPayrollPdf, voir son commentaire, pour que les deux exports restent
+    // cohérents l'un avec l'autre sur ce report.
+    const carriedInRows = m.carriedInRows || []
+    const carriedOutRows = m.carriedOutRows || []
+    const ownCountedRows = m.ownCountedRows || []
+    const cutoffRows = m.cutoffRows || []
+    if (carriedInRows.length) {
+      push(['Report du mois précédent (après le 25) :'])
+      carriedInRows.forEach(s => push(shiftRowCells(s)))
+      if (ownCountedRows.length) push([`${m.label} :`])
+    }
+    ownCountedRows.forEach(s => push(shiftRowCells(s)))
+    if (carriedOutRows.length) {
+      push(['Reporté au mois prochain (après le 25) :'])
+      carriedOutRows.forEach(s => push(shiftRowCells(s)))
+    }
+    // Durée/Nuit/Sup nuit sommées sur m.rows en entier (mois calendaire complet), Sup/OFF trav.
+    // sommées sur `cutoffRows` (les lignes réellement affichées ci-dessus dont la majoration compte
+    // dans ce bulletin) — même raison que dans exportPayrollPdf, voir son commentaire.
+    if (carriedInRows.length || m.rows?.length) {
+      push(shiftTotalsRow(m.rows || [], cutoffRows))
+    }
 
     const ws = XLSX.utils.aoa_to_sheet(data)
     ws['!cols'] = [{ wch: 50 }, { wch: 11 }, { wch: 16 }, { wch: 8 }, { wch: 8 }, { wch: 11 }, { wch: 8 }, { wch: 10 }]
