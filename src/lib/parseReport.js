@@ -5,7 +5,12 @@ import { todayLocal } from './date'
 // (parseReport ci-dessous) — le "#" peut être côté label ("Booking # : 30502", éventuellement collé
 // "Booking# :") ou côté valeur ("Booking : #30502", format actuel de l'outil externe) ; ne dupliquer
 // ce motif nulle part ailleurs, ces trois usages ont déjà divergé une fois par le passé.
-const BOOKING_PATTERN = 'Booking\\s*#?\\s*:\\s*#?\\s*(\\S+)'
+// `[ \t]*` (pas `\s*`) autour du "#"/":" : même bug que val() dans parseReport() ci-dessous — un
+// `\s*` matche aussi `\n`, donc une référence vide ferait sauter la ligne du champ et capturer le
+// premier mot du label suivant comme booking_ref. `\S+` reste inchangé (une vraie ref n'a jamais
+// d'espace), donc sur un champ vide ce motif ne matche plus du tout la ligne — booking_ref retombe
+// alors correctement sur '' (voir booking_ref ci-dessous) plutôt que sur un fragment de la ligne suivante.
+const BOOKING_PATTERN = 'Booking[ \\t]*#?[ \\t]*:[ \\t]*#?[ \\t]*(\\S+)'
 export const BOOKING_FIELD_RE = new RegExp(BOOKING_PATTERN, 'i')
 
 const SAT_MAP = {
@@ -15,8 +20,15 @@ const SAT_MAP = {
   MAUVAISE: 'MAUVAISE', MAUVAIS: 'MAUVAISE'
 }
 
+// `[ \t]*` (pas `\s*`) autour du ":" : un `\s*` inclut `\n`, donc quand le champ est VIDE, l'ancien
+// `(.+)` (au moins un caractère) échouait à matcher sur la ligne du label et le `\s*` glouton
+// continuait à travers le saut de ligne jusqu'au prochain contenu non-blanc — le label suivant se
+// faisait alors capturer comme valeur du champ vide (ex. "Client : \nGreeteur : X" attribuait
+// "Greeteur :" à client_name). `(.*)` autorise une capture vide sans dépasser la ligne du label,
+// puisque `.` ne matche jamais `\n` — trouvé en testant l'aller-retour formatMissionReport() →
+// parseReport() sur une mission aux champs optionnels vides.
 function val(text, label) {
-  const re = new RegExp(label + '\\s*:\\s*(.+)', 'i')
+  const re = new RegExp(label + '[ \\t]*:[ \\t]*(.*)', 'i')
   const m = text.match(re)
   return m ? m[1].trim() : ''
 }
