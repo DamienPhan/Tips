@@ -1,4 +1,4 @@
-import { BASE_SHIFT_MIN, NORMAL_SHIFT_MIN } from './parseShift'
+import { BASE_SHIFT_MIN, NORMAL_SHIFT_MIN, isRestDay } from './parseShift'
 
 const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 
@@ -71,7 +71,12 @@ export function monthlyDetail(shifts) {
   const keys = new Set([...calendarMap.keys(), ...cutoffMap.keys()])
   return [...keys].sort().map(key => {
     const [y, mo] = key.split('-')
-    const rows = (calendarMap.get(key) || []).slice().sort((a, b) => (a.shift_date < b.shift_date ? -1 : 1))
+    // Un jour OFF non travaillé (isRestDay : is_day_off sans aucune heure, voir parseShift.js) n'a
+    // rien à montrer dans le relevé jour par jour — Durée/Sup/OFF trav./Nuit/Sup nuit y sont toujours
+    // à 0, retiré du relevé sur demande pour ne pas noyer les jours effectivement travaillés parmi
+    // des lignes "OFF" vides. Exclu ici (pas juste à l'affichage dans exportPayroll.js) puisqu'il
+    // contribue de toute façon 0 à baseHours/night/nightOvertime plus bas : aucun total n'est affecté.
+    const rows = (calendarMap.get(key) || []).filter(s => !isRestDay(s)).sort((a, b) => (a.shift_date < b.shift_date ? -1 : 1))
     // Heures normales = un forfait fixe de 7h30 (NORMAL_SHIFT_MIN) par jour travaillé, pas le brut
     // moins la part sup — vérifié contre le relevé réel de l'utilisateur. Un jour OFF travaillé ne
     // compte pas du tout ici : ses heures sont entièrement à part (prime jour OFF, voir payroll.js).
