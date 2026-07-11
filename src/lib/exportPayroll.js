@@ -20,12 +20,59 @@ const AMBER_TINT = [250, 240, 217]
 const ZEBRA_TINT = [250, 246, 235]
 const GREY_LINE = [200, 200, 200]
 
+// Hauteur de contenu (mm) qu'occupera exportPayrollPdf en mode hoursOnly pour un mois donné — mêmes
+// incréments de `y` que la boucle de dessin plus bas (titre/sous-titre fixes = 50mm, puis en-tête +
+// sections + lignes + total du tableau), calculée à l'avance pour dimensionner une page A4 sur mesure
+// plutôt que de garder la hauteur A4 complète (297mm) avec un grand vide en bas dès que le mois est
+// court — le cas visible sur un relevé d'un seul mois avec peu de shifts. Ne sert que si le résultat
+// tient sur une seule page (≤ 280mm, même seuil que le saut de page de la boucle de dessin) ; sinon on
+// retombe sur une A4 standard et la pagination existante prend le relais normalement.
+function estimateHoursOnlyBottom(m) {
+  const carriedInRows = m.carriedInRows || []
+  const carriedOutRows = m.carriedOutRows || []
+  const ownCountedRows = m.ownCountedRows || []
+  const allDetailRows = [...carriedInRows, ...(m.rows || [])]
+  let y = 50
+  if (allDetailRows.length) {
+    y += 8 + 7 // titre "Détail des heures" + en-tête du tableau
+    if (carriedInRows.length) {
+      y += 5 + 6 * carriedInRows.length // étiquette "Report du mois précédent" + ses lignes
+      if (ownCountedRows.length) y += 5 // étiquette du mois propre
+    }
+    y += 6 * ownCountedRows.length
+    if (carriedOutRows.length) y += 5 + 6 * carriedOutRows.length // étiquette "Reporté au mois prochain" + ses lignes
+    y += 6 // ligne Total
+    y += 12
+  } else {
+    y += 10 // "Aucune heure enregistrée pour ce mois."
+  }
+  return y
+}
+
 // options.hoursOnly : n'exporte que le relevé "Détail des heures" (avec sa ligne Total), sans le
 // récapitulatif de paie — pour un simple relevé d'heures sans les montants, distinct du PDF complet.
 export async function exportPayrollPdf(payrollByMonth, hourlyRate, options = {}) {
   const hoursOnly = !!options.hoursOnly
   const { jsPDF } = await import('jspdf')
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  let pageFormat = 'a4'
+  let orientation = 'p'
+  if (hoursOnly && payrollByMonth.length === 1) {
+    const estimated = estimateHoursOnlyBottom(payrollByMonth[0])
+    if (estimated <= 280) {
+      const height = Math.max(estimated + 10, 60)
+      pageFormat = [210, height]
+      // jsPDF force la largeur ≤ hauteur en mode "portrait" (et inversement en "landscape") en
+      // permutant silencieusement le format fourni s'il ne respecte pas cette contrainte — pour un
+      // relevé court, `height` est plus petite que la largeur fixe de 210mm (page volontairement plus
+      // large que haute), donc "portrait" l'aurait permuté et cassé tout le calage des colonnes
+      // (calibrées sur 210mm de large). "landscape" est ici un simple choix technique pour éviter
+      // cette permutation, pas une vraie orientation paysage — pour un relevé plus long où `height`
+      // dépasse 210mm, la page redevient plus haute que large et "portrait" est le bon choix pour la
+      // même raison (ne pas déclencher la permutation dans l'autre sens).
+      orientation = height < 210 ? 'l' : 'p'
+    }
+  }
+  const doc = new jsPDF({ unit: 'mm', format: pageFormat, orientation })
   doc.setFont(FONT, 'normal')
   const W = 210
   const marginX = 14

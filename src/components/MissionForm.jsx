@@ -1,6 +1,7 @@
 import { todayLocal } from '../lib/date'
 import { useState } from 'react'
 import { useMissions } from '../store/missions'
+import { formatMissionReport } from '../lib/formatReport'
 
 const EMPTY = {
   intervention_date: todayLocal(),
@@ -20,7 +21,19 @@ export default function MissionForm({ initial, onClose }) {
   const update = useMissions(s => s.update)
   const remove = useMissions(s => s.remove)
   const [f, setF] = useState(initial ?? EMPTY)
+  const [copied, setCopied] = useState(false)
   const set = (k, v) => setF(prev => ({ ...prev, [k]: v }))
+
+  const copyReport = async () => {
+    try {
+      await navigator.clipboard.writeText(formatMissionReport(f))
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch (e) {
+      console.error('Copie du rapport échouée', e)
+      alert(`La copie a échoué : ${e.message || e}`)
+    }
+  }
 
   const submit = async () => {
     const payload = {
@@ -62,11 +75,11 @@ export default function MissionForm({ initial, onClose }) {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div>
+          <div className="min-w-0">
             <label htmlFor="mf-date" className={label}>Date</label>
-            <input id="mf-date" type="date" value={f.intervention_date} onChange={e => set('intervention_date', e.target.value)} className={field} />
+            <input id="mf-date" type="date" value={f.intervention_date} onChange={e => set('intervention_date', e.target.value)} className={`${field} min-w-0`} />
           </div>
-          <div>
+          <div className="min-w-0">
             <label htmlFor="mf-service" className={label}>Type</label>
             <select id="mf-service" value={f.service_type} onChange={e => set('service_type', e.target.value)} className={field}>
               <option value="ARR">Arrivée</option><option value="DEP">Départ</option><option value="TRANSIT">Transit</option>
@@ -177,6 +190,13 @@ export default function MissionForm({ initial, onClose }) {
               placeholder="Décrire le problème" rows={2} className={`${field} mt-2 resize-none`} />
           )}
         </div>
+
+        {initial?.id && (
+          <button onClick={copyReport}
+            className="w-full py-3 rounded-xl text-sm bg-surface-2 text-muted active:bg-white/10">
+            {copied ? 'Copié !' : 'Copier le rapport'}
+          </button>
+        )}
 
         {initial?.id && (
           <button
