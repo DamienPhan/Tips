@@ -192,7 +192,7 @@ export default function PayrollSimulator() {
             </div>
           </section>
 
-          <p className="text-muted text-xs mb-3">Simulation indicative — cotisations salariales estimées à taux forfaitaire, hors prélèvement à la source.</p>
+          <p className="text-muted text-xs mb-3">Simulation indicative</p>
 
           <div className="flex gap-2">
             <button onClick={() => run('xlsx')} disabled={busy}
