@@ -103,10 +103,10 @@ export function monthlyDetail(shifts) {
   return [...keys].sort().map(key => {
     const [y, mo] = key.split('-')
     // Un jour OFF non travaillé (isRestDay : is_day_off sans aucune heure, voir parseShift.js) n'a
-    // rien à montrer dans le relevé jour par jour — Durée/Sup/OFF trav./Nuit/Sup nuit y sont toujours
-    // à 0, retiré du relevé sur demande pour ne pas noyer les jours effectivement travaillés parmi
-    // des lignes "OFF" vides. Exclu ici (pas juste à l'affichage dans exportPayroll.js) puisqu'il
-    // contribue de toute façon 0 à baseHours/night/nightOvertime plus bas : aucun total n'est affecté.
+    // rien à montrer dans le relevé jour par jour — Durée/Sup/OFF trav./Nuit y sont toujours à 0,
+    // retiré du relevé sur demande pour ne pas noyer les jours effectivement travaillés parmi des
+    // lignes "OFF" vides. Exclu ici (pas juste à l'affichage dans exportPayroll.js) puisqu'il
+    // contribue de toute façon 0 à baseHours/night plus bas : aucun total n'est affecté.
     const rows = (calendarMap.get(key) || []).filter(s => !isRestDay(s)).sort((a, b) => (a.shift_date < b.shift_date ? -1 : 1))
     // Heures normales = un forfait fixe de 7h30 (NORMAL_SHIFT_MIN) par jour travaillé, pas le brut
     // moins la part sup — vérifié contre le relevé réel de l'utilisateur. Un jour OFF travaillé ne
@@ -118,7 +118,6 @@ export function monthlyDetail(shifts) {
       return sum + normalMin / 60
     }, 0)
     const night = rows.reduce((sum, s) => sum + Number(s.night_hours || 0), 0)
-    const nightOvertime = rows.reduce((sum, s) => sum + Number(s.night_overtime_hours || 0), 0)
     // Parmi les shifts propres à ce mois calendaire (rows), ceux datés du 26-fin dont la majoration
     // part au contraire vers le bulletin SUIVANT — restent dans `rows` (relevé jour par jour complet,
     // Durée/Nuit ne suivent jamais la coupure) mais doivent être exclus du total Sup/OFF trav. de CE
@@ -143,7 +142,7 @@ export function monthlyDetail(shifts) {
       carriedOutRows,
       ownCountedRows,
       cutoffRows,
-      total: { baseHours, overtime: cutoff.overtime, overtimeCarriedIn: cutoff.overtimeCarriedIn, offWorked: cutoff.offWorked, night, nightOvertime }
+      total: { baseHours, overtime: cutoff.overtime, overtimeCarriedIn: cutoff.overtimeCarriedIn, offWorked: cutoff.offWorked, night }
     }
   })
 }

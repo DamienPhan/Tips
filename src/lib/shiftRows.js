@@ -17,7 +17,10 @@ function dayName(dateStr) {
 }
 
 // Détail jour par jour d'un mois de shifts — utilisé par le relevé d'heures et le PDF de paie.
-export const SHIFT_TABLE_HEAD = ['Date', 'Jour', 'Horaires', 'Durée', 'Sup', 'OFF trav.', 'Nuit', 'Sup nuit']
+// Pas de colonne "Sup nuit" (heures sup ET de nuit à la fois) : trop de catégories qui se chevauchent
+// avec Sup/Nuit rendaient le tableau confus, et cette valeur n'est de toute façon jamais utilisée
+// dans le calcul de paie (retirée sur demande).
+export const SHIFT_TABLE_HEAD = ['Date', 'Jour', 'Horaires', 'Durée', 'Sup', 'OFF trav.', 'Nuit']
 
 export function shiftRowCells(s) {
   return [
@@ -27,13 +30,12 @@ export function shiftRowCells(s) {
     fmtHours(s.hours),
     fmtHours(s.is_day_off ? 0 : s.overtime_hours),
     fmtHours(s.is_day_off ? s.overtime_hours : 0),
-    fmtHours(s.night_hours),
-    fmtHours(s.night_overtime_hours)
+    fmtHours(s.night_hours)
   ]
 }
 
 // Ligne de totaux du tableau détail des heures — mêmes colonnes que shiftRowCells().
-// Durée/Nuit/Sup nuit ne suivent jamais la coupure de paie (voir monthlyDetail.js) : sommées sur
+// Durée/Nuit ne suivent jamais la coupure de paie (voir monthlyDetail.js) : sommées sur
 // `calendarRows`, le mois calendaire complet (y compris les shifts du 26-fin dont la part sup/jour
 // OFF est reportée au mois suivant — leur durée/heures de nuit restent comptées ce mois-ci). Sup/OFF
 // trav. suivent au contraire la coupure : sommées sur `cutoffRows`, l'ensemble exact des shifts dont
@@ -48,5 +50,5 @@ export function shiftTotalsRow(calendarRows, cutoffRows) {
   const sumCal = key => calendarRows.reduce((acc, s) => acc + Number(s[key] || 0), 0)
   const sumOvertime = cutoffRows.reduce((acc, s) => acc + (s.is_day_off ? 0 : Number(s.overtime_hours || 0)), 0)
   const sumOffWorked = cutoffRows.reduce((acc, s) => acc + (s.is_day_off ? Number(s.overtime_hours || 0) : 0), 0)
-  return ['', '', 'Total', fmtHours(sumCal('hours')), fmtHours(sumOvertime), fmtHours(sumOffWorked), fmtHours(sumCal('night_hours')), fmtHours(sumCal('night_overtime_hours'))]
+  return ['', '', 'Total', fmtHours(sumCal('hours')), fmtHours(sumOvertime), fmtHours(sumOffWorked), fmtHours(sumCal('night_hours'))]
 }
