@@ -112,7 +112,10 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate, options = {})
     // Relevé d'heures détaillé jour par jour (même contenu que l'ancien export "Relevé d'heures"
     // de l'écran Accueil, retiré : tout est désormais réuni dans le PDF de paie) — affiché en
     // premier, avant le récapitulatif de paie.
-    const detailX = [14, 38, 56, 92, 110, 130, 154, 176]
+    // 7 colonnes (Date/Jour/Horaires/Durée/Sup/OFF trav./Nuit — plus de "Sup nuit", retirée du
+    // tableau) réparties sur toute la largeur disponible plutôt que de garder les positions calées
+    // sur l'ancienne 8e colonne, ce qui aurait laissé un grand vide à droite du tableau.
+    const detailX = [14, 38, 56, 92, 118, 144, 174]
     const detailW = W - 28
     // carriedInRows/carriedOutRows/ownCountedRows/cutoffRows sont précalculés par monthlyDetail()
     // (voir son commentaire) plutôt que recalculés ici — exportPayrollXlsx en a besoin à l'identique,
@@ -209,9 +212,9 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate, options = {})
         carriedOutRows.forEach(drawRow)
       }
 
-      // Ligne de totaux : fond distinct + gras, même si elle prend une septième colonne (Date/Jour
-      // vides, "Total" dans la colonne Horaires) plutôt que d'ajouter une colonne dédiée. Durée/Nuit/
-      // Sup nuit restent sommées sur m.rows en entier (mois calendaire complet, y compris les shifts
+      // Ligne de totaux : fond distinct + gras, même si elle prend une colonne vide (Date/Jour
+      // vides, "Total" dans la colonne Horaires) plutôt que d'ajouter une colonne dédiée. Durée/Nuit
+      // restent sommées sur m.rows en entier (mois calendaire complet, y compris les shifts
       // reportés au mois suivant — leur durée/nuit restent comptées ce mois-ci, voir monthlyDetail.js).
       // Sup/OFF trav. sont sommées sur `cutoffRows` (carriedInRows + ownCountedRows), l'ensemble exact
       // des lignes visiblement affichées ci-dessus dont la majoration compte dans ce bulletin — et non
@@ -385,7 +388,7 @@ export async function exportPayrollXlsx(payrollByMonth, hourlyRate) {
       push(['Reporté au mois prochain (après le 25) :'])
       carriedOutRows.forEach(s => push(shiftRowCells(s)))
     }
-    // Durée/Nuit/Sup nuit sommées sur m.rows en entier (mois calendaire complet), Sup/OFF trav.
+    // Durée/Nuit sommées sur m.rows en entier (mois calendaire complet), Sup/OFF trav.
     // sommées sur `cutoffRows` (les lignes réellement affichées ci-dessus dont la majoration compte
     // dans ce bulletin) — même raison que dans exportPayrollPdf, voir son commentaire.
     if (carriedInRows.length || m.rows?.length) {
@@ -393,7 +396,7 @@ export async function exportPayrollXlsx(payrollByMonth, hourlyRate) {
     }
 
     const ws = XLSX.utils.aoa_to_sheet(data)
-    ws['!cols'] = [{ wch: 50 }, { wch: 11 }, { wch: 16 }, { wch: 8 }, { wch: 8 }, { wch: 11 }, { wch: 8 }, { wch: 10 }]
+    ws['!cols'] = [{ wch: 50 }, { wch: 11 }, { wch: 16 }, { wch: 8 }, { wch: 8 }, { wch: 11 }, { wch: 8 }]
 
     const setFmt = (r, c, fmt) => {
       const addr = XLSX.utils.encode_cell({ r, c })
