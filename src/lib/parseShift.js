@@ -78,17 +78,17 @@ export function overtimePayMin(workedMinutes, isDayOff) {
   return overtimeMin(workedMinutes, isDayOff)
 }
 
-// Minutes de nuit (22h-7h) d'un shift, et part de nuit dans les heures sup.
-// Les heures sup occupent les DERNIÈRES minutes réelles du shift (au-delà de 8h30, ou tout si OFF).
-export function nightBreakdown(shift, isDayOff) {
+// Minutes de nuit (22h-7h) d'un shift. Une heure qui est à la fois "nuit" et "sup" compte déjà en
+// entier dans night_hours ET dans overtime_hours indépendamment (les deux totaux couvrent chacun
+// tout le shift, sans s'exclure) — un troisième champ "sup de nuit" isolant ce recoupement a existé
+// mais s'est révélé inutile et confus (retiré du tableau d'export en premier, puis de partout) : il
+// n'a jamais influencé le calcul de paie, et affiché à côté de Sup et Nuit il donnait l'impression
+// d'une catégorie distincte à additionner, alors que ses heures sont déjà comptées dans les deux autres.
+export function nightBreakdown(shift) {
   const worked = workedMin(shift)
   const from = Number(shift.start_min) || 0
   const to = from + worked
-  const nightTotal = nightMinutesIn(from, to)
-  const otMin = overtimeMin(worked, isDayOff)
-  // les sup occupent la fin du shift : [to - otMin, to)
-  const nightOt = otMin > 0 ? nightMinutesIn(to - otMin, to) : 0
-  return { night_hours: nightTotal / 60, night_overtime_hours: nightOt / 60 }
+  return { night_hours: nightMinutesIn(from, to) / 60 }
 }
 
 export function parseShifts(text) {
@@ -102,7 +102,7 @@ export function parseShifts(text) {
     const worked = end - start
     const isDayOff = /off/i.test(rest)
     const shiftObj = { start_min: start, end_min: end }
-    const night = nightBreakdown(shiftObj, isDayOff)
+    const night = nightBreakdown(shiftObj)
     out.push({
       shift_date: normDate(d, mo),
       start_min: start,
@@ -110,8 +110,7 @@ export function parseShifts(text) {
       hours: worked / 60,                              // valeur exacte (pas d'arrondi destructif)
       is_day_off: isDayOff,
       overtime_hours: overtimePayMin(worked, isDayOff) / 60,
-      night_hours: night.night_hours,
-      night_overtime_hours: night.night_overtime_hours
+      night_hours: night.night_hours
     })
   }
   return out
@@ -120,13 +119,12 @@ export function parseShifts(text) {
 // Recalcule overtime_hours pour un shift existant (toggle OFF / édition horaires).
 export function recompute(shift, isDayOff) {
   const w = workedMin(shift)
-  const night = nightBreakdown(shift, isDayOff)
+  const night = nightBreakdown(shift)
   return {
     hours: w / 60,
     overtime_hours: overtimePayMin(w, isDayOff) / 60,
     is_day_off: isDayOff,
-    night_hours: night.night_hours,
-    night_overtime_hours: night.night_overtime_hours
+    night_hours: night.night_hours
   }
 }
 

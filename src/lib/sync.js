@@ -132,7 +132,7 @@ export function initSync() {
   })()
 }
 
-const SHIFT_COLUMNS = ['id', 'shift_date', 'start_min', 'end_min', 'hours', 'overtime_hours', 'is_day_off', 'night_hours', 'night_overtime_hours', 'created_at', 'updated_at']
+const SHIFT_COLUMNS = ['id', 'shift_date', 'start_min', 'end_min', 'hours', 'overtime_hours', 'is_day_off', 'night_hours', 'created_at', 'updated_at']
 
 function toShiftPayload(s) {
   const p = {}

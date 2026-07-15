@@ -126,13 +126,12 @@ export default function Home() {
           <Stat label="Heures travaillées (OFF)" value={fmtHours(sum.offWorked)} accent />
         </div>
       )}
-      {(sum.night > 0 || sum.nightOvertime > 0) && (
-        <div className="grid grid-cols-2 gap-2 mb-6">
+      {sum.night > 0 && (
+        <div className="grid grid-cols-1 gap-2 mb-6">
           <Stat label="Heures de nuit" value={fmtHours(sum.night)} />
-          <Stat label="Sup de nuit" value={fmtHours(sum.nightOvertime)} accent={sum.nightOvertime > 0} />
         </div>
       )}
-      {!(sum.night > 0 || sum.nightOvertime > 0) && <div className="mb-6" />}
+      {!(sum.night > 0) && <div className="mb-6" />}
 
       <section className="bg-surface rounded-2xl p-4 mb-4">
         <h3 className="font-medium text-sm mb-3">Revenus</h3>

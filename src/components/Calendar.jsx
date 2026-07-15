@@ -92,7 +92,7 @@ export default function Calendar() {
     const s = parseTime(startStr), e = parseTime(endStr)
     if (s !== null && e !== null) {
       const w = workedMin({ start_min: s, end_min: e })
-      const night = nightBreakdown({ start_min: s, end_min: e }, editOff)
+      const night = nightBreakdown({ start_min: s, end_min: e })
       preview = { brut: fmtHours(w / 60), sup: fmtHours(overtimePayMin(w, editOff) / 60), nuit: fmtHours(night.night_hours) }
     }
   }
@@ -236,7 +236,6 @@ export default function Calendar() {
               <Row label="Durée brute" value={fmtHours(selShift.hours)} />
               <Row label={selShift.is_day_off ? 'Heures travaillées (OFF)' : 'Heures sup.'} value={selShift.overtime_hours > 0 ? fmtHours(selShift.overtime_hours) : '0h'} accent={selShift.overtime_hours > 0} />
               {selShift.night_hours > 0 && <Row label="Heures de nuit" value={fmtHours(selShift.night_hours)} />}
-              {selShift.night_overtime_hours > 0 && <Row label="Sup de nuit" value={fmtHours(selShift.night_overtime_hours)} accent />}
 
               {selShift.is_day_off && (
                 <div className="bg-error/10 rounded-xl px-3 py-2.5 mt-2 mb-1">
