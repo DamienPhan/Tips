@@ -1,9 +1,18 @@
 import { monthlyDetail } from './monthlyDetail'
+import { fmtHours } from './parseShift'
 
 export const DEFAULT_RATES = {
-  overtimeThresholdHours: 33,  // les 33 premières heures de sup dans le mois (heures sup + heures jour OFF confondues) à +25%, à partir de la 34e heure : +50%
-  overtimeMultiplierLow: 1.25, // heures sup jusqu'à la 33e heure
-  overtimeMultiplierHigh: 1.5, // heures sup à partir de la 34e heure
+  // Seuil du palier +25%. La vraie règle légale est hebdomadaire (35h/semaine de base sans
+  // majoration, les 8h suivantes de la 36e à la 43e heure à +25%, à partir de la 44e à +50%) —
+  // mais le pool sup de l'app reste agrégé au mois entier (voir monthlyDetail.js/le 25 du mois),
+  // pas semaine civile par semaine civile (choix explicite : découper par semaine impliquerait de
+  // décider comment rattacher une semaine à cheval sur deux mois de paie, ce qui n'a pas de réponse
+  // évidente). Ce seuil est donc la bande hebdomadaire de 8h ramenée au mois par un facteur
+  // 52 semaines / 12 mois, la même conversion que weeklyBaseHours ci-dessous pour la base légale
+  // mensuelle — une approximation assumée plutôt qu'un vrai calcul semaine par semaine.
+  overtimeThresholdHours: Math.round(8 * 52 / 12 * 100) / 100, // ≈ 34.67h
+  overtimeMultiplierLow: 1.25, // heures sup jusqu'au seuil
+  overtimeMultiplierHigh: 1.5, // heures sup au-delà du seuil
   nightBonusRate: 0.25,        // prime de nuit, en supplément du taux de base
   weeklyBaseHours: 35,         // base légale hebdomadaire — mode "Mensualisé" uniquement
   // Cotisations salariales : taux forfaitaire, pas un détail poste par poste (santé/retraite/
@@ -16,11 +25,11 @@ export const DEFAULT_RATES = {
 
 // Calcule la simulation de paie pour un mois (élément retourné par monthlyDetail()).
 // Les heures d'un jour OFF travaillé sont des heures sup comme les autres pour la paie : elles
-// rejoignent le même pool majoré à 25%/50% avec le même seuil mensuel de 33h que les heures sup
+// rejoignent le même pool majoré à 25%/50% avec le même seuil mensuel que les heures sup
 // normales, au lieu d'une prime à part à +25% plat (vérifié auprès de l'utilisateur — l'employeur ne
 // fait pas de distinction, contrairement à une hypothèse antérieure basée sur une lecture différente
 // d'un bulletin de salaire). Les heures de nuit restent en revanche une prime à part, +25% en plus du
-// taux de base sur chaque heure de nuit, hors du pool sup et du seuil de 33h. Le "Détail des heures"
+// taux de base sur chaque heure de nuit, hors du pool sup et de son seuil. Le "Détail des heures"
 // (relevé jour par jour) continue d'afficher Sup/OFF trav. dans deux colonnes séparées — utile pour
 // savoir quels jours étaient officiellement des jours OFF — mais côté paie, l'argent est calculé sur
 // le total fusionné ; `offWorkedHours` reste exposé (voir plus bas) uniquement pour une ligne
@@ -59,7 +68,7 @@ export function computeMonthPayroll(month, hourlyRate, rates = DEFAULT_RATES, op
   }
 
   // Pool fusionné : heures sup normales + heures d'un jour OFF travaillé, tiérées ensemble sur le
-  // même seuil mensuel de 33h (voir le commentaire au-dessus de cette fonction).
+  // même seuil mensuel (voir DEFAULT_RATES.overtimeThresholdHours ci-dessus).
   const overtimePoolHours = total.overtime + offWorkedHours
   const overtimeLowHours = Math.min(overtimePoolHours, rates.overtimeThresholdHours)
   const overtimeHighHours = Math.max(0, overtimePoolHours - rates.overtimeThresholdHours)
@@ -81,6 +90,7 @@ export function computeMonthPayroll(month, hourlyRate, rates = DEFAULT_RATES, op
     baseHours, baseAmount,
     fullBaseHours, fullBaseAmount, absenceDays, absenceHours, absenceAmount,
     offWorkedHours,
+    overtimeThresholdHours: rates.overtimeThresholdHours,
     overtimeLowHours, overtimeHighHours, overtimeLowAmount, overtimeHighAmount,
     overtimeCarriedInHours: total.overtimeCarriedIn,
     nightHours: total.night, nightBonus,
@@ -140,9 +150,14 @@ export function payrollRows(p) {
   if (p.offWorkedHours > 0) {
     rows.push({ label: 'Dont heures travaillées en OFF (déjà incluses ci-dessous)', hours: p.offWorkedHours, amount: null })
   }
+  // Seuil affiché dynamiquement (ex. "34h40") plutôt qu'en dur ("33h"/"34h") : overtimeThresholdHours
+  // n'est plus un entier rond depuis qu'il dérive de la bande légale hebdomadaire de 8h ramenée au
+  // mois (voir DEFAULT_RATES ci-dessus) — un texte figé aurait désynchronisé silencieusement de la
+  // vraie valeur utilisée pour le calcul au prochain changement de ce seuil.
+  const thresholdLabel = fmtHours(p.overtimeThresholdHours)
   rows.push(
-    { label: "Heures sup jusqu'à 33h (+25%)", hours: p.overtimeLowHours, amount: p.overtimeLowAmount },
-    { label: 'Heures sup à partir de 34h (+50%)', hours: p.overtimeHighHours, amount: p.overtimeHighAmount },
+    { label: `Heures sup jusqu'à ${thresholdLabel} (+25%)`, hours: p.overtimeLowHours, amount: p.overtimeLowAmount },
+    { label: `Heures sup au-delà de ${thresholdLabel} (+50%)`, hours: p.overtimeHighHours, amount: p.overtimeHighAmount },
     { label: 'Prime de nuit (+25%)', hours: p.nightHours, amount: p.nightBonus }
   )
   return rows
