@@ -32,6 +32,15 @@ export default function App() {
 
   useEffect(() => { if (session) { initSync(); init() } }, [session, init])
 
+  // Filet de sécurité pour un refresh/fermeture juste après une saisie pas encore synchronisée
+  // (ex. Safari en navigation privée, où l'écriture locale peut ne pas survivre au rechargement) :
+  // avertit avant de quitter la page tant qu'il reste des lignes pending/error/pending-delete.
+  useEffect(() => {
+    const handler = (e) => { if (pending > 0) { e.preventDefault(); e.returnValue = '' } }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [pending])
+
   if (!ready) return <div className="min-h-full" />
   if (!session) return <Auth />
   if (loading) return <div className="min-h-full" />
@@ -66,7 +75,7 @@ function SyncBar({ online, pending }) {
   if (!online) { txt = 'Hors ligne'; cls = 'text-pending' }
   else if (pending > 0) { txt = `${pending} en attente`; cls = 'text-pending' }
   return (
-    <div className="sticky top-0 z-20 bg-night/90 backdrop-blur-md px-5 py-2 flex items-center justify-between border-b border-white/[0.04]">
+    <div className="sticky top-0 z-20 bg-night/90 backdrop-blur-md px-5 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] flex items-center justify-between border-b border-white/[0.04]">
       <span className="text-muted text-[0.65rem] uppercase tracking-wider">Rapports de mission</span>
       <div className="flex items-center gap-3">
         <span className={`flex items-center gap-1.5 text-xs ${cls}`}>
