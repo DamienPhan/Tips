@@ -28,6 +28,5 @@ export function summary(missions, shifts, period, refDate = new Date()) {
   const overtime = ss.reduce((a, s) => a + (s.is_day_off ? 0 : Number(s.overtime_hours || 0)), 0)
   const offWorked = ss.reduce((a, s) => a + (s.is_day_off ? Number(s.overtime_hours || 0) : 0), 0)
   const night = ss.reduce((a, s) => a + Number(s.night_hours || 0), 0)
-  const nightOvertime = ss.reduce((a, s) => a + Number(s.night_overtime_hours || 0), 0)
-  return { tips, hours, overtime, offWorked, night, nightOvertime, missionCount: ms.length, shiftCount: ss.length }
+  return { tips, hours, overtime, offWorked, night, missionCount: ms.length, shiftCount: ss.length }
 }

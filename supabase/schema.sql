@@ -69,7 +69,6 @@ create table if not exists work_shifts (
   overtime_hours numeric(5,2) default 0,
   is_day_off boolean default false,
   night_hours numeric(5,2) default 0,
-  night_overtime_hours numeric(5,2) default 0,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -85,15 +84,19 @@ create policy owner_all_shifts on work_shifts
 -- Migration non destructive (si table déjà existante) :
 -- alter table work_shifts add column if not exists is_day_off boolean default false;
 -- alter table work_shifts add column if not exists updated_at timestamptz default now();
--- night_hours/night_overtime_hours (heures de nuit 22h-7h) : ajoutées ici le 2026-06-30, mais un
--- projet Supabase créé avant cette date n'a jamais reçu ces colonnes tant que cette migration
--- n'est pas exécutée manuellement — chaque shift enregistré depuis échoue à la synchro avec
--- l'erreur PostgREST "Could not find the 'night_hours' column of 'work_shifts' in the schema
--- cache" (visible dans SyncDetails.jsx), la ligne reste bloquée en local en syncStatus 'error'.
+-- night_hours (heures de nuit 22h-7h) : ajoutée ici le 2026-06-30, mais un projet Supabase créé
+-- avant cette date n'a jamais reçu cette colonne tant que cette migration n'est pas exécutée
+-- manuellement — chaque shift enregistré depuis échoue à la synchro avec l'erreur PostgREST
+-- "Could not find the 'night_hours' column of 'work_shifts' in the schema cache" (visible dans
+-- SyncDetails.jsx), la ligne reste bloquée en local en syncStatus 'error'. (Un champ
+-- night_overtime_hours l'accompagnait à l'origine — l'overlap entre heures de nuit et heures sup —
+-- retiré ensuite : une heure à la fois nuit et sup compte déjà en entier dans night_hours ET
+-- overtime_hours indépendamment, ce troisième champ n'ajoutait qu'une catégorie confuse en plus,
+-- jamais utilisée par le calcul de paie. Si `night_overtime_hours` existe encore sur un projet créé
+-- avant ce retrait, la colonne est inoffensive mais n'est plus lue ni écrite par l'app.)
 -- alter table work_shifts add column if not exists night_hours numeric(5,2) default 0;
--- alter table work_shifts add column if not exists night_overtime_hours numeric(5,2) default 0;
 -- hours/overtime_hours étaient en numeric(4,1) (1 décimale) : un shift de 3h45/6h15 (fractions
 -- .25/.75) se faisait arrondir silencieusement par Postgres à l'écriture (3.75 -> 3.8), faussant
--- l'affichage après un aller-retour serveur. Passage à numeric(5,2), comme night_hours/night_overtime_hours.
+-- l'affichage après un aller-retour serveur. Passage à numeric(5,2), comme night_hours.
 -- alter table work_shifts alter column hours type numeric(5,2);
 -- alter table work_shifts alter column overtime_hours type numeric(5,2);
