@@ -67,11 +67,17 @@ function SyncBar({ online, pending }) {
   else if (pending > 0) { txt = `${pending} en attente`; cls = 'text-pending' }
   return (
     <div className="sticky top-0 z-20 bg-night/90 backdrop-blur-md px-5 py-2 flex items-center justify-between border-b border-white/[0.04]">
-      <button onClick={logout} className="text-muted text-[0.65rem] uppercase tracking-wider active:text-amber">Rapports de mission</button>
-      <span className={`flex items-center gap-1.5 text-xs ${cls}`}>
-        <span className={`w-1.5 h-1.5 rounded-full ${online && pending === 0 ? 'bg-synced' : 'bg-pending'} ${pending > 0 ? 'animate-pulse' : ''}`} />
-        {txt}
-      </span>
+      <span className="text-muted text-[0.65rem] uppercase tracking-wider">Rapports de mission</span>
+      <div className="flex items-center gap-3">
+        <span className={`flex items-center gap-1.5 text-xs ${cls}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${online && pending === 0 ? 'bg-synced' : 'bg-pending'} ${pending > 0 ? 'animate-pulse' : ''}`} />
+          {txt}
+        </span>
+        <button onClick={logout} aria-label="Se déconnecter"
+          className="text-muted text-[0.65rem] uppercase tracking-wider active:text-amber">
+          Déconnexion
+        </button>
+      </div>
     </div>
   )
 }
