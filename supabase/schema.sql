@@ -85,6 +85,13 @@ create policy owner_all_shifts on work_shifts
 -- Migration non destructive (si table déjà existante) :
 -- alter table work_shifts add column if not exists is_day_off boolean default false;
 -- alter table work_shifts add column if not exists updated_at timestamptz default now();
+-- night_hours/night_overtime_hours (heures de nuit 22h-7h) : ajoutées ici le 2026-06-30, mais un
+-- projet Supabase créé avant cette date n'a jamais reçu ces colonnes tant que cette migration
+-- n'est pas exécutée manuellement — chaque shift enregistré depuis échoue à la synchro avec
+-- l'erreur PostgREST "Could not find the 'night_hours' column of 'work_shifts' in the schema
+-- cache" (visible dans SyncDetails.jsx), la ligne reste bloquée en local en syncStatus 'error'.
+-- alter table work_shifts add column if not exists night_hours numeric(5,2) default 0;
+-- alter table work_shifts add column if not exists night_overtime_hours numeric(5,2) default 0;
 -- hours/overtime_hours étaient en numeric(4,1) (1 décimale) : un shift de 3h45/6h15 (fractions
 -- .25/.75) se faisait arrondir silencieusement par Postgres à l'écriture (3.75 -> 3.8), faussant
 -- l'affichage après un aller-retour serveur. Passage à numeric(5,2), comme night_hours/night_overtime_hours.
