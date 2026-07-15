@@ -35,20 +35,21 @@ export function shiftRowCells(s) {
 }
 
 // Ligne de totaux du tableau détail des heures — mêmes colonnes que shiftRowCells().
-// Durée/Nuit ne suivent jamais la coupure de paie (voir monthlyDetail.js) : sommées sur
-// `calendarRows`, le mois calendaire complet (y compris les shifts du 26-fin dont la part sup/jour
-// OFF est reportée au mois suivant — leur durée/heures de nuit restent comptées ce mois-ci). Sup/OFF
-// trav. suivent au contraire la coupure : sommées sur `cutoffRows`, l'ensemble exact des shifts dont
-// la majoration est comptée dans le bulletin de CE mois (les shifts propres non reportés + les
-// shifts reportés du mois précédent) — un ensemble différent de `calendarRows` dès qu'il y a un
-// report dans un sens ou dans l'autre. Les deux ensembles sont construits par l'appelant
-// (exportPayroll.js, via `rows`/`carriedInRows`/`carriedOutRows` de monthlyDetail()) plutôt que
-// recalculés ici, pour que ce total reste garanti égal à la somme des lignes effectivement affichées
-// dans le tableau — un total imposé depuis ailleurs (ex. les totaux de computeMonthPayroll()) peut
-// diverger silencieusement des lignes visibles dès qu'un shift est reporté (bug trouvé en review).
+// Durée ne suit jamais la coupure de paie (voir monthlyDetail.js) : sommée sur `calendarRows`, le
+// mois calendaire complet (y compris les shifts du 26-fin dont la part sup/jour OFF/nuit est
+// reportée au mois suivant — leur durée reste comptée ce mois-ci). Sup/OFF trav./Nuit suivent au
+// contraire la coupure : sommées sur `cutoffRows`, l'ensemble exact des shifts dont la majoration
+// est comptée dans le bulletin de CE mois (les shifts propres non reportés + les shifts reportés du
+// mois précédent) — un ensemble différent de `calendarRows` dès qu'il y a un report dans un sens ou
+// dans l'autre. Les deux ensembles sont construits par l'appelant (exportPayroll.js, via
+// `rows`/`carriedInRows`/`carriedOutRows` de monthlyDetail()) plutôt que recalculés ici, pour que ce
+// total reste garanti égal à la somme des lignes effectivement affichées dans le tableau — un total
+// imposé depuis ailleurs (ex. les totaux de computeMonthPayroll()) peut diverger silencieusement des
+// lignes visibles dès qu'un shift est reporté (bug trouvé en review).
 export function shiftTotalsRow(calendarRows, cutoffRows) {
   const sumCal = key => calendarRows.reduce((acc, s) => acc + Number(s[key] || 0), 0)
   const sumOvertime = cutoffRows.reduce((acc, s) => acc + (s.is_day_off ? 0 : Number(s.overtime_hours || 0)), 0)
   const sumOffWorked = cutoffRows.reduce((acc, s) => acc + (s.is_day_off ? Number(s.overtime_hours || 0) : 0), 0)
-  return ['', '', 'Total', fmtHours(sumCal('hours')), fmtHours(sumOvertime), fmtHours(sumOffWorked), fmtHours(sumCal('night_hours'))]
+  const sumNight = cutoffRows.reduce((acc, s) => acc + Number(s.night_hours || 0), 0)
+  return ['', '', 'Total', fmtHours(sumCal('hours')), fmtHours(sumOvertime), fmtHours(sumOffWorked), fmtHours(sumNight)]
 }
