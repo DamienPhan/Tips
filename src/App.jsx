@@ -11,6 +11,7 @@ import MissionsList from './components/MissionsList'
 import MissionForm from './components/MissionForm'
 import ImportModal from './components/ImportModal'
 import PayrollSimulator from './components/PayrollSimulator'
+import SyncDetails from './components/SyncDetails'
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -18,6 +19,7 @@ export default function App() {
   const [tab, setTab] = useState('home')
   const [importing, setImporting] = useState(false)
   const [editing, setEditing] = useState(null)
+  const [syncDetails, setSyncDetails] = useState(false)
   const missions = useMissions(s => s.missions)
   const shifts = useMissions(s => s.shifts)
   const init = useMissions(s => s.init)
@@ -47,7 +49,7 @@ export default function App() {
 
   return (
     <div className="mx-auto max-w-[480px] min-h-full">
-      <SyncBar online={online} pending={pending} />
+      <SyncBar online={online} pending={pending} onPendingClick={() => setSyncDetails(true)} />
 
       {tab === 'home' && <Home />}
       {tab === 'calendar' && <Calendar />}
@@ -64,24 +66,26 @@ export default function App() {
 
       {importing && <ImportModal onClose={() => setImporting(false)} onManual={() => { setImporting(false); setEditing({}) }} />}
       {editing !== null && <MissionForm initial={editing.id ? editing : undefined} onClose={() => setEditing(null)} />}
+      {syncDetails && <SyncDetails onClose={() => setSyncDetails(false)} />}
       <Analytics />
     </div>
   )
 }
 
-function SyncBar({ online, pending }) {
+function SyncBar({ online, pending, onPendingClick }) {
   const logout = () => { if (confirm('Se déconnecter ?')) supabase.auth.signOut() }
   let txt = 'En ligne', cls = 'text-synced'
   if (!online) { txt = 'Hors ligne'; cls = 'text-pending' }
   else if (pending > 0) { txt = `${pending} en attente`; cls = 'text-pending' }
+  const StatusTag = pending > 0 ? 'button' : 'span'
   return (
     <div className="sticky top-0 z-20 bg-night/90 backdrop-blur-md px-5 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] flex items-center justify-between border-b border-white/[0.04]">
       <span className="text-muted text-[0.65rem] uppercase tracking-wider">Rapports de mission</span>
       <div className="flex items-center gap-3">
-        <span className={`flex items-center gap-1.5 text-xs ${cls}`}>
+        <StatusTag {...(pending > 0 ? { onClick: onPendingClick } : {})} className={`flex items-center gap-1.5 text-xs ${cls}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${online && pending === 0 ? 'bg-synced' : 'bg-pending'} ${pending > 0 ? 'animate-pulse' : ''}`} />
           {txt}
-        </span>
+        </StatusTag>
         <button onClick={logout} aria-label="Se déconnecter"
           className="text-muted text-[0.65rem] uppercase tracking-wider active:text-amber">
           Déconnexion
