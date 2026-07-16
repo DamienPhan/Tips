@@ -334,43 +334,60 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate, options = {})
   doc.save(hoursOnly ? `detail-heures-${suffix}.pdf` : `simulation-paie-${suffix}.pdf`)
 }
 
-// La build xlsx installée (community edition) ignore silencieusement tout style de cellule
-// (gras, couleurs, bordures) à l'écriture — vérifié empiriquement en inspectant le styles.xml
-// produit. La clarté vient donc uniquement de la structure (titres en MAJUSCULES isolés par des
-// lignes vides, indentation) et des formats numériques réels via `.z` (ceux-là fonctionnent bien).
+// Couleurs/formats repris de exportPayrollPdf (AMBER/AMBER_TINT/ZEBRA_TINT ci-dessus) pour que les
+// deux exports se ressemblent — possible depuis le passage de `xlsx` (community edition, qui ignore
+// silencieusement tout style de cellule à l'écriture — limite vérifiée empiriquement, documentée
+// dans l'historique git) à `exceljs`, qui applique réellement gras/couleurs/bordures.
+const argb = ([r, g, b]) => 'FF' + [r, g, b].map(n => n.toString(16).padStart(2, '0')).join('')
+const AMBER_ARGB = argb(AMBER)
+const AMBER_TINT_ARGB = argb(AMBER_TINT)
+const ZEBRA_TINT_ARGB = argb(ZEBRA_TINT)
+const GREY_LINE_ARGB = argb(GREY_LINE)
 const EUR_FMT = '#,##0.00" €"'
 const HOURS_FMT = '0.00" h"'
+const thinBorder = { style: 'thin', color: { argb: GREY_LINE_ARGB } }
+const fill = c => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: c } })
 
 export async function exportPayrollXlsx(payrollByMonth, hourlyRate) {
-  const XLSX = await import('xlsx')
-  const wb = XLSX.utils.book_new()
+  const ExcelJS = await import('exceljs')
+  const wb = new ExcelJS.Workbook()
 
   payrollByMonth.forEach(m => {
     const p = m.payroll
     const rows = payrollRows(p)
+    const ws = wb.addWorksheet(m.sheet)
+    ws.columns = [{ width: 50 }, { width: 11 }, { width: 16 }, { width: 8 }, { width: 8 }, { width: 11 }, { width: 8 }]
 
-    const data = []
-    const push = row => { data.push(row); return data.length - 1 }
+    const addRow = (values, opts = {}) => {
+      const row = ws.addRow(values)
+      if (opts.bold) row.font = { bold: true }
+      if (opts.size) row.font = { ...row.font, size: opts.size }
+      if (opts.italic) row.font = { ...row.font, italic: true, color: { argb: 'FF808080' } }
+      if (opts.fill) row.eachCell({ includeEmpty: true }, cell => { cell.fill = fill(opts.fill) })
+      return row
+    }
 
-    push(['SIMULATION DE PAIE'])
-    push([m.label])
-    const rateRow = push(['Taux horaire (€/h)', hourlyRate])
-    push([])
-    push(['DÉTAIL DE LA RÉMUNÉRATION'])
-    push(['Catégorie', 'Heures', 'Montant (€)'])
-    const catStart = data.length
-    rows.forEach(r => push([r.label, Number(r.hours.toFixed(2)), r.amount == null ? '' : Number(r.amount.toFixed(2))]))
-    const catEnd = data.length
-    push([])
-    const totalRow = push(['TOTAL BRUT ESTIMÉ', '', Number(p.grossTotal.toFixed(2))])
-    const cotisRow = push([`Cotisations salariales (est., ${(p.cotisationRate * 100).toFixed(1)}%)`, '', Number((-p.cotisationAmount).toFixed(2))])
-    const netRow = push(['NET ESTIMÉ', '', Number(p.netTotal.toFixed(2))])
-    push([])
-    push(['Simulation indicative'])
-    push([])
-    push(['DÉTAIL DES HEURES'])
-    push(['Sup : heure de pause (1h) déjà retirée du calcul.'])
-    push(SHIFT_TABLE_HEAD)
+    addRow(['SIMULATION DE PAIE'], { bold: true, size: 14 })
+    addRow([m.label], { size: 12 })
+    const rateRow = addRow(['Taux horaire (€/h)', hourlyRate])
+    addRow([])
+    addRow(['DÉTAIL DE LA RÉMUNÉRATION'], { bold: true, size: 12 })
+    const headRow1 = addRow(['Catégorie', 'Heures', 'Montant (€)'], { bold: true, fill: AMBER_TINT_ARGB })
+    const catStart = ws.rowCount + 1
+    rows.forEach(r => addRow([r.label, Number(r.hours.toFixed(2)), r.amount == null ? '' : Number(r.amount.toFixed(2))]))
+    const catEnd = ws.rowCount
+    // Pas de ligne vide ici (contrairement à l'ancienne version aoa) : TOTAL BRUT/cotisations/NET
+    // enchaînent directement les catégories, comme dans exportPayrollPdf, pour que la bordure posée
+    // plus bas (headRow1 → netRow) forme un rectangle plein sans trou au milieu.
+    const totalRow = addRow(['TOTAL BRUT ESTIMÉ', '', Number(p.grossTotal.toFixed(2))], { bold: true, fill: AMBER_ARGB })
+    const cotisRow = addRow([`Cotisations salariales (est., ${(p.cotisationRate * 100).toFixed(1)}%)`, '', Number((-p.cotisationAmount).toFixed(2))])
+    const netRow = addRow(['NET ESTIMÉ', '', Number(p.netTotal.toFixed(2))], { bold: true, fill: AMBER_ARGB })
+    addRow([])
+    addRow(['Simulation indicative'], { italic: true })
+    addRow([])
+    addRow(['DÉTAIL DES HEURES'], { bold: true, size: 12 })
+    addRow(['Sup : heure de pause (1h) déjà retirée du calcul.'], { italic: true })
+    const headRow2 = addRow(SHIFT_TABLE_HEAD, { bold: true, fill: AMBER_TINT_ARGB })
     // carriedInRows/carriedOutRows/ownCountedRows/cutoffRows sont précalculés par monthlyDetail() —
     // même source que exportPayrollPdf, voir son commentaire, pour que les deux exports restent
     // cohérents l'un avec l'autre sur ce report.
@@ -378,42 +395,73 @@ export async function exportPayrollXlsx(payrollByMonth, hourlyRate) {
     const carriedOutRows = m.carriedOutRows || []
     const ownCountedRows = m.ownCountedRows || []
     const cutoffRows = m.cutoffRows || []
-    if (carriedInRows.length) {
-      push(['Report du mois précédent (après le 25) :'])
-      carriedInRows.forEach(s => push(shiftRowCells(s)))
-      if (ownCountedRows.length) push([`${m.label} :`])
+    let zebraIdx = 0
+    const addDetailRow = s => {
+      const row = addRow(shiftRowCells(s))
+      if (zebraIdx % 2 === 1) row.eachCell({ includeEmpty: true }, cell => { cell.fill = fill(ZEBRA_TINT_ARGB) })
+      zebraIdx++
     }
-    ownCountedRows.forEach(s => push(shiftRowCells(s)))
+    if (carriedInRows.length) {
+      addRow(['Report du mois précédent (après le 25) :'], { italic: true })
+      carriedInRows.forEach(addDetailRow)
+      if (ownCountedRows.length) addRow([`${m.label} :`], { italic: true })
+    }
+    ownCountedRows.forEach(addDetailRow)
     if (carriedOutRows.length) {
-      push(['Reporté au mois prochain (après le 25) :'])
-      carriedOutRows.forEach(s => push(shiftRowCells(s)))
+      addRow(['Reporté au mois prochain (après le 25) :'], { italic: true })
+      carriedOutRows.forEach(addDetailRow)
     }
     // Durée sommée sur m.rows en entier (mois calendaire complet), Sup/OFF trav./Nuit
     // sommées sur `cutoffRows` (les lignes réellement affichées ci-dessus dont la majoration compte
     // dans ce bulletin) — même raison que dans exportPayrollPdf, voir son commentaire.
+    let detailTotalRow = null
     if (carriedInRows.length || m.rows?.length) {
-      push(shiftTotalsRow(m.rows || [], cutoffRows))
+      detailTotalRow = addRow(shiftTotalsRow(m.rows || [], cutoffRows), { bold: true, fill: AMBER_TINT_ARGB })
     }
 
-    const ws = XLSX.utils.aoa_to_sheet(data)
-    ws['!cols'] = [{ wch: 50 }, { wch: 11 }, { wch: 16 }, { wch: 8 }, { wch: 8 }, { wch: 11 }, { wch: 8 }]
-
-    const setFmt = (r, c, fmt) => {
-      const addr = XLSX.utils.encode_cell({ r, c })
-      if (ws[addr]) ws[addr].z = fmt
+    const setFmt = (row, c, fmt) => { row.getCell(c).numFmt = fmt }
+    setFmt(rateRow, 2, EUR_FMT)
+    for (let r = catStart; r <= catEnd; r++) {
+      setFmt(ws.getRow(r), 2, HOURS_FMT)
+      setFmt(ws.getRow(r), 3, EUR_FMT)
     }
-    setFmt(rateRow, 1, EUR_FMT)
-    for (let r = catStart; r < catEnd; r++) {
-      setFmt(r, 1, HOURS_FMT)
-      setFmt(r, 2, EUR_FMT)
-    }
-    setFmt(totalRow, 2, EUR_FMT)
-    setFmt(cotisRow, 2, EUR_FMT)
-    setFmt(netRow, 2, EUR_FMT)
+    setFmt(totalRow, 3, EUR_FMT)
+    setFmt(cotisRow, 3, EUR_FMT)
+    setFmt(netRow, 3, EUR_FMT)
 
-    XLSX.utils.book_append_sheet(wb, ws, m.sheet)
+    // Bordures fines autour des deux tableaux (récap + détail des heures), même esprit que le
+    // `doc.rect(...)`/les `doc.line(...)` de exportPayrollPdf — un fond de couleur seul ne suffit
+    // pas à délimiter visuellement un tableau dans Excel comme il le fait dans un PDF dessiné.
+    // Bordure posée colonne par colonne (`row.getCell(c)`, pas `eachCell`) : une ligne d'étiquette
+    // comme "Report du mois précédent..." n'a qu'une seule valeur poussée (cellCount=1) — `eachCell`
+    // n'aurait bordé que sa première colonne, laissant un contour en dents de scie au lieu d'un
+    // rectangle plein sur toute la largeur du tableau.
+    const border = (row, cols) => {
+      for (let c = 1; c <= cols; c++) row.getCell(c).border = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder }
+    }
+    for (let r = headRow1.number; r <= netRow.number; r++) border(ws.getRow(r), 3)
+    if (detailTotalRow) {
+      for (let r = headRow2.number; r <= detailTotalRow.number; r++) border(ws.getRow(r), 7)
+    }
   })
 
-  if (payrollByMonth.length === 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Aucune donnée']]), 'Vide')
-  XLSX.writeFile(wb, `simulation-paie-${payrollByMonth[0]?.key || todayLocal().slice(0, 7)}.xlsx`)
+  if (payrollByMonth.length === 0) wb.addWorksheet('Vide').addRow(['Aucune donnée'])
+
+  const buffer = await wb.xlsx.writeBuffer()
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `simulation-paie-${payrollByMonth[0]?.key || todayLocal().slice(0, 7)}.xlsx`
+  // `xlsx`'s own writeFile() (avant ce passage à exceljs) attachait l'ancre au DOM avant de cliquer,
+  // la retirait juste après, et ne révoquait l'URL blob qu'après un délai de 60s plutôt que tout de
+  // suite — repris ici à l'identique : un `.click()` sur une ancre jamais insérée dans le document,
+  // ou une révocation synchrone de l'URL avant que le navigateur n'ait effectivement démarré le
+  // téléchargement, sont des échecs silencieux connus sur certaines versions de WebKit (iOS Safari,
+  // PWA installée) — pas de reproduction locale possible ici, mais ce sont exactement les
+  // plateformes que cet export doit prendre en charge (voir le préchargement jspdf/exceljs plus bas).
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(url), 60000)
 }
