@@ -19,7 +19,7 @@ function draftFromMap(map) {
   return Object.fromEntries(Object.entries(map).map(([k, v]) => [k, String(v).replace('.', ',')]))
 }
 
-// Erreur typique d'un chunk (jspdf/xlsx) devenu introuvable après un déploiement : le service
+// Erreur typique d'un chunk (jspdf/exceljs) devenu introuvable après un déploiement : le service
 // worker (registerType 'autoUpdate') a basculé en silence sur une nouvelle version sans recharger
 // l'onglet déjà ouvert, qui continue de référencer les anciens noms de fichiers hashés. Les
 // navigateurs formulent l'erreur différemment (Chromium/Firefox/Safari) d'où plusieurs motifs.
@@ -52,11 +52,11 @@ export default function PayrollSimulator() {
   const [cotisationRate, setCotisationRate] = useState(() => (Number(localStorage.getItem(COTISATION_RATE_KEY)) || defaultCotisationPct) / 100)
   const [cotisationRateDraft, setCotisationRateDraft] = useState(() => String(Number(localStorage.getItem(COTISATION_RATE_KEY)) || defaultCotisationPct).replace('.', ','))
 
-  // Précharge jsPDF/xlsx dès l'ouverture de l'onglet : sur Safari iOS / PWA installée, un
+  // Précharge jsPDF/exceljs dès l'ouverture de l'onglet : sur Safari iOS / PWA installée, un
   // téléchargement déclenché après un `await import(...)` réseau perd le "geste utilisateur"
   // du clic et échoue silencieusement. En préchargeant ici, l'import est déjà en cache au
   // moment du clic et le déclenchement du fichier reste dans la même activation.
-  useEffect(() => { import('jspdf'); import('xlsx') }, [])
+  useEffect(() => { import('jspdf'); import('exceljs') }, [])
 
   const rates = useMemo(() => ({ ...DEFAULT_RATES, weeklyBaseHours, employeeCotisationRate: cotisationRate }), [weeklyBaseHours, cotisationRate])
   const results = useMemo(() => computePayroll(shifts, hourlyRate, rates, { payMode, absenceDaysByMonth }),
