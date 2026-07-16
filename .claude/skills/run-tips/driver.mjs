@@ -16,22 +16,11 @@
 
 import fs from 'node:fs'
 import readline from 'node:readline'
-import { createRequire } from 'node:module'
-
-// This repo has no local `playwright` dependency (it's an app dependency-free
-// test harness, not a project dependency). Try a normal resolution first (in
-// case a project ever adds it locally), and fall back to this container's
-// pre-installed global copy (see SKILL.md "Prerequisites").
-let chromium
-try {
-  ;({ chromium } = await import('playwright'))
-} catch {
-  const req = createRequire('/opt/node22/lib/node_modules/_/index.js')
-  ;({ chromium } = req('playwright'))
-}
+import { chromium } from 'playwright'
 
 const SHOTS_DIR = process.env.SHOTS_DIR || '/tmp/tips-shots'
 fs.mkdirSync(SHOTS_DIR, { recursive: true })
+const NAV = { waitUntil: 'domcontentloaded' }
 
 let browser, context, page
 const logs = []
@@ -43,11 +32,12 @@ function trackPage(p) {
 }
 
 async function cmd_launch(url) {
+  if (browser) await browser.close() // relaunching without closing the old one would orphan it
   browser = await chromium.launch({ args: ['--no-sandbox'] })
   context = await browser.newContext({ viewport: { width: 420, height: 900 } })
   page = await context.newPage()
   trackPage(page)
-  if (url) await page.goto(url, { waitUntil: 'domcontentloaded' })
+  if (url) await page.goto(url, NAV)
   console.log('ok launched' + (url ? ` at ${url}` : ''))
 }
 
@@ -84,8 +74,8 @@ async function cmd_seedAuth(projectRef = 'fake') {
   console.log(`ok seeded ${key}`)
 }
 
-async function cmd_goto(url) { await page.goto(url, { waitUntil: 'domcontentloaded' }); console.log('ok goto ' + url) }
-async function cmd_reload() { await page.reload({ waitUntil: 'domcontentloaded' }); console.log('ok reload') }
+async function cmd_goto(url) { await page.goto(url, NAV); console.log('ok goto ' + url) }
+async function cmd_reload() { await page.reload(NAV); console.log('ok reload') }
 async function cmd_click(sel) { await page.click(sel, { timeout: 10000 }); console.log('ok click ' + sel) }
 async function cmd_fill(sel, ...rest) { await page.fill(sel, rest.join(' '), { timeout: 10000 }); console.log('ok fill ' + sel) }
 async function cmd_press(key) { await page.keyboard.press(key); console.log('ok press ' + key) }
@@ -124,24 +114,21 @@ const HANDLERS = {
   quit: cmd_quit, exit: cmd_quit,
 }
 
-// Commands must run strictly one-at-a-time (readline's 'line' event fires
-// for every queued line before any async handler resolves, so without this
-// queue `launch` and `wait-for` would race and `wait-for` would run before
-// `page` exists).
-let queue = Promise.resolve()
+// `for await` over the async-iterable readline interface awaits each line's
+// handler before pulling the next line, so commands run strictly one-at-a-
+// time (needed: `wait-for` right after `launch` must not start before
+// `launch` has set `page`) with no extra queue bookkeeping.
 const rl = readline.createInterface({ input: process.stdin, terminal: false })
-rl.on('line', (line) => {
+for await (const line of rl) {
   const trimmed = line.trim()
-  if (!trimmed || trimmed.startsWith('#')) return
-  queue = queue.then(async () => {
-    const [name, ...args] = trimmed.split(/\s+/)
-    const handler = HANDLERS[name]
-    if (!handler) { console.log('error unknown command: ' + name); return }
-    try {
-      await handler(...args)
-    } catch (err) {
-      console.log('error ' + err.message)
-    }
-  })
-})
-rl.on('close', async () => { await queue; if (browser) await browser.close() })
+  if (!trimmed || trimmed.startsWith('#')) continue
+  const [name, ...args] = trimmed.split(/\s+/)
+  const handler = HANDLERS[name]
+  if (!handler) { console.log('error unknown command: ' + name); continue }
+  try {
+    await handler(...args)
+  } catch (err) {
+    console.log('error ' + err.message)
+  }
+}
+if (browser) await browser.close()

@@ -13,28 +13,26 @@ All paths below are relative to the repo root (`/home/user/Tips`).
 
 ## Prerequisites
 
-Nothing to `apt-get install` — this container already has Chromium and
-Playwright's Node package pre-installed globally:
+Nothing to `apt-get install` — this container already has Chromium
+pre-installed at `/opt/pw-browsers` (`PLAYWRIGHT_BROWSERS_PATH` is already
+set in the environment), and Node on PATH (`node -v` → v22).
 
-- Browsers at `/opt/pw-browsers` (`PLAYWRIGHT_BROWSERS_PATH` is already set
-  in the environment).
-- The `playwright` npm package itself at
-  `/opt/node22/lib/node_modules/playwright` (global, `npm ls -g`). It is
-  **not** a dependency of this repo (adding a browser-automation package to
-  a production PWA's `package.json` isn't warranted just for this harness),
-  so `driver.mjs` resolves it with a fallback: try normal `import('playwright')`
-  first, then fall back to `createRequire` pointed at the global install. If
-  you're on a machine without that global install, `npm install playwright`
-  locally in the repo (or in this skill dir) and the normal import path
-  picks it up automatically — no driver changes needed.
-
-Node is already on PATH (`node -v` → v22).
+`playwright` itself is **not** a dependency of the app's own `package.json`
+(a browser-automation package has no place in a production PWA's
+dependencies) — it's declared instead in
+`.claude/skills/run-tips/package.json`, scoped to this skill. See Setup.
 
 ## Setup
 
 ```bash
-npm install
+npm install                                  # app deps, repo root
+cd .claude/skills/run-tips && npm install && cd -   # driver's own playwright dep
 ```
+
+The second install is fast and does **not** re-download Chromium — it
+reuses the browser already at `/opt/pw-browsers` as long as the installed
+`playwright` version matches (pin the version in that `package.json` if you
+ever bump it, to keep this true).
 
 `.env.local` must exist with `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`
 (see README.md). **You do not need real Supabase credentials to run and
@@ -72,8 +70,8 @@ run hits `EADDRINUSE`.
 
 ### 2. Drive it with `driver.mjs`
 
-Pipe a script to stdin (each command blocks until it finishes — commands
-queue, so you never race `launch` against the command right after it):
+Pipe a script to stdin (each command blocks until it finishes, so you never
+race `launch` against the command right after it):
 
 ```bash
 node .claude/skills/run-tips/driver.mjs <<'EOF'
@@ -172,28 +170,19 @@ the closest thing to a correctness gate beyond manual driving.
 
 ## Gotchas
 
-- **`seed-auth`'s project ref is the *Supabase* hostname, not the page's.**
-  The storage key `supabase-js` reads is derived from `VITE_SUPABASE_URL`
-  (`fake.supabase.co` → `fake`), not `window.location.hostname`
-  (`localhost`). Seeding `sb-localhost-auth-token` looks like it worked (no
-  error) but silently leaves the app on the login screen after reload — the
-  driver's `seed-auth` command already handles this correctly, but if
+- **`seed-auth`'s project ref is the *Supabase* hostname, not the page's** —
+  see "Auth bypass" above. Seeding the wrong ref looks like it worked (no
+  error) but silently leaves the app on the login screen after reload; if
   `.env.local`'s `VITE_SUPABASE_URL` ever changes, pass the new ref
   explicitly: `seed-auth <new-ref>`.
-- **`playwright` isn't a repo dependency.** Plain `import('playwright')` in
-  `driver.mjs` fails with `ERR_MODULE_NOT_FOUND` unless it's installed
-  somewhere Node's ESM resolver can see (this repo's `node_modules`, or an
-  ancestor). The driver falls back to this container's global install via
-  `createRequire`; see Prerequisites.
-- **`readline`'s `line` event doesn't wait for your async handler.** An
+- **`readline`'s `'line'` event doesn't wait for your async handler** — an
   earlier version of `driver.mjs` fired `launch`, `wait-for`, `screenshot`
-  etc. all essentially concurrently — `wait-for` ran before `page` even
-  existed and failed silently mid-batch. Commands are now chained through an
-  explicit promise queue (see the `queue = queue.then(...)` block at the
-  bottom of `driver.mjs`) so each command only starts once the previous one
-  resolves. If you extend the driver, keep new commands going through
-  `HANDLERS`/the queue rather than firing Playwright calls directly from the
-  `line` handler.
+  etc. all essentially concurrently, so `wait-for` ran before `page` even
+  existed. Fixed by driving the loop with `for await (const line of rl)`
+  instead of an event listener, which awaits each command before pulling the
+  next line. If you extend the driver, keep new commands going through
+  `HANDLERS` inside that loop rather than firing Playwright calls from a
+  separate `rl.on('line', ...)` listener — that reintroduces the race.
 - **Google Fonts / Vercel Analytics requests always fail here** (no real
   outbound network to those hosts in this container) — `console-errors` will
   always show `ERR_CONNECTION_RESET` for `fonts.googleapis.com` and
@@ -211,8 +200,5 @@ the closest thing to a correctness gate beyond manual driving.
   Gotchas above) — screenshot and check whether you're still on the
   `Connexion` screen.
 - **`Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'playwright'`**: the
-  global fallback path in `driver.mjs` (`/opt/node22/lib/node_modules`)
-  doesn't exist on this machine. Run `npm install playwright` in the repo
-  (or `cd .claude/skills/run-tips && npm init -y && npm install playwright`)
-  — the plain `import('playwright')` path will then succeed and the fallback
-  is never reached.
+  second `npm install` in Setup (inside `.claude/skills/run-tips/`) hasn't
+  been run yet, or ran in the wrong directory.
