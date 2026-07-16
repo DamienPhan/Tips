@@ -2,15 +2,13 @@ import { monthlyDetail } from './monthlyDetail'
 import { fmtHours } from './parseShift'
 
 export const DEFAULT_RATES = {
-  // Seuil du palier +25%. La vraie règle légale est hebdomadaire (35h/semaine de base sans
-  // majoration, les 8h suivantes de la 36e à la 43e heure à +25%, à partir de la 44e à +50%) —
-  // mais le pool sup de l'app reste agrégé au mois entier (voir monthlyDetail.js/le 25 du mois),
-  // pas semaine civile par semaine civile (choix explicite : découper par semaine impliquerait de
-  // décider comment rattacher une semaine à cheval sur deux mois de paie, ce qui n'a pas de réponse
-  // évidente). Ce seuil est donc la bande hebdomadaire de 8h ramenée au mois par un facteur
-  // 52 semaines / 12 mois, la même conversion que weeklyBaseHours ci-dessous pour la base légale
-  // mensuelle — une approximation assumée plutôt qu'un vrai calcul semaine par semaine.
-  overtimeThresholdHours: Math.round(8 * 52 / 12 * 100) / 100, // ≈ 34.67h
+  // Seuil du palier +25% : les heures sup du pool mensuel (voir monthlyDetail.js) sont majorées à
+  // +25% jusqu'à la 33e heure comprise, puis +50% à partir de la 34e — valeur donnée directement par
+  // l'utilisateur (pas une conversion depuis la règle légale hebdomadaire générique de 35h/8h/44h,
+  // essayée puis abandonnée : la convention réelle de l'employeur diffère du barème légal par
+  // défaut). Le pool reste agrégé au mois entier, pas semaine civile par semaine civile (voir la
+  // note sur la coupure du 25 dans monthlyDetail.js).
+  overtimeThresholdHours: 33,
   overtimeMultiplierLow: 1.25, // heures sup jusqu'au seuil
   overtimeMultiplierHigh: 1.5, // heures sup au-delà du seuil
   nightBonusRate: 0.25,        // prime de nuit, en supplément du taux de base
@@ -150,10 +148,10 @@ export function payrollRows(p) {
   if (p.offWorkedHours > 0) {
     rows.push({ label: 'Dont heures travaillées en OFF (déjà incluses ci-dessous)', hours: p.offWorkedHours, amount: null })
   }
-  // Seuil affiché dynamiquement (ex. "34h40") plutôt qu'en dur ("33h"/"34h") : overtimeThresholdHours
-  // n'est plus un entier rond depuis qu'il dérive de la bande légale hebdomadaire de 8h ramenée au
-  // mois (voir DEFAULT_RATES ci-dessus) — un texte figé aurait désynchronisé silencieusement de la
-  // vraie valeur utilisée pour le calcul au prochain changement de ce seuil.
+  // Seuil affiché dynamiquement plutôt qu'en dur dans le texte : ce seuil a déjà changé deux fois
+  // en pratique (33 → une approximation hebdomadaire non ronde → 33 à nouveau) — un libellé figé
+  // se désynchroniserait silencieusement de la vraie valeur utilisée pour le calcul à chaque
+  // changement de DEFAULT_RATES.overtimeThresholdHours.
   const thresholdLabel = fmtHours(p.overtimeThresholdHours)
   rows.push(
     { label: `Heures sup jusqu'à ${thresholdLabel} (+25%)`, hours: p.overtimeLowHours, amount: p.overtimeLowAmount },
