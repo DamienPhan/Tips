@@ -38,9 +38,13 @@ export const DEFAULT_RATES = {
 // une base légale fixe (rates.weeklyBaseHours × 52/12, arrondi à 2 décimales — ex. 151.67h pour
 // 35h/semaine), proratisée par un nombre de jours d'absence saisi manuellement (options.absenceDays ;
 // l'app ne connaît pas les dates d'entrée/sortie de contrat). Le taux journalier d'absence est
-// weeklyBaseHours ÷ 7 (5h/jour pour 35h/semaine), PAS la base mensuelle ÷ 30 : vérifié au centime
-// près sur un vrai bulletin où "Absence entrée" pour 14 jours calendaires (2 semaines pleines)
-// valait exactement 70.00h = 14 × 5, alors que 151.67 ÷ 30 × 14 aurait donné 70.78h.
+// weeklyBaseHours ÷ 5 (7h/jour pour 35h/semaine, soit un jour ouvré), PAS la base mensuelle ÷ 30 :
+// une première vérification sur 14 jours calendaires d'absence (2 semaines pleines) valant
+// exactement 70.00h avait mené à ÷ 7 (5h/jour), mais 14 étant un multiple de 7, ce cas ne
+// distinguait pas ÷ 7 de ÷ 5 (70h = 14 × 5 = 10 × 7 tout autant). Un second bulletin, sur une
+// absence d'un seul jour ("Abs. Congés ss solde"), a tranché : base 7.00h, montant 94.61 € à
+// 13.5162 €/h (7.00 × 13.5162 = 94.6134), donc bien 7h/jour — ÷ 5, pas ÷ 7. Reste, comme ÷ 7,
+// différent de la base mensuelle ÷ 30 (151.67 ÷ 30 × 14 aurait donné 70.78h, pas 70.00h).
 // Heures sup/nuit/jour OFF restent calculées sur les heures réelles dans les deux modes : ce sont
 // des suppléments variables, pas la base.
 export function computeMonthPayroll(month, hourlyRate, rates = DEFAULT_RATES, options = {}) {
@@ -53,7 +57,7 @@ export function computeMonthPayroll(month, hourlyRate, rates = DEFAULT_RATES, op
   if (payMode === 'monthly') {
     fullBaseHours = Math.round(rates.weeklyBaseHours * 52 / 12 * 100) / 100
     fullBaseAmount = fullBaseHours * hourlyRate
-    absenceHours = (rates.weeklyBaseHours / 7) * absenceDays
+    absenceHours = (rates.weeklyBaseHours / 5) * absenceDays
     absenceAmount = absenceHours * hourlyRate
     baseHours = Math.max(0, fullBaseHours - absenceHours)
     baseAmount = fullBaseAmount - absenceAmount
