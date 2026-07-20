@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useMissions } from '../store/missions'
 import { summary } from '../lib/summary'
 import { revenueBars, serviceBreakdown, dailyAverage, barLabel } from '../lib/charts'
-import { lastMonthTips, DISPATCH_RATE } from '../lib/dispatch'
+import { currentMonthTips, DISPATCH_RATE } from '../lib/dispatch'
 import { fmtHours } from '../lib/parseShift'
 import { parseLocal } from '../lib/date'
 import { eur, MONTHS } from '../lib/format'
@@ -193,11 +193,11 @@ export default function Home() {
 }
 
 function DispatchSection({ missions, revealed, onToggle }) {
-  const r = lastMonthTips(missions)
+  const r = currentMonthTips(missions)
   return (
     <section className="bg-surface rounded-2xl p-4 mt-4">
       <h3 className="font-medium text-sm mb-1">Partage dispatch</h3>
-      <p className="text-muted text-xs mb-3">Total des pourboires du mois dernier et part de {Math.round(DISPATCH_RATE * 100)}% à reverser.</p>
+      <p className="text-muted text-xs mb-3">Total des pourboires du mois en cours et part de {Math.round(DISPATCH_RATE * 100)}% à reverser.</p>
       {r.total === 0 ? (
         <p className="text-muted text-sm text-center py-4">Aucun pourboire enregistré en {r.label.toLowerCase()}.</p>
       ) : (
