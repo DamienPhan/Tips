@@ -109,9 +109,36 @@ export async function pullFromServer() {
   })
 }
 
+// Jour décroissant, puis created_at décroissant, puis id en dernier recours — partagé avec
+// MissionsList.jsx (qui re-trie chaque groupe-jour en défense supplémentaire) pour que les deux ne
+// dérivent pas l'un de l'autre. Le tiebreak sur `id` est nécessaire : un comparateur qui ne renvoie
+// jamais 0 pour deux valeurs égales viole le contrat de tri (compare(a,b) et compare(b,a) ne
+// peuvent pas être -1 tous les deux), ce qui rend l'ordre des égalités dépendant du moteur JS/de
+// l'algorithme de tri utilisé plutôt que déterministe — recréant le même bug "l'ordre semble
+// aléatoire" que ce tri est censé corriger, simplement limité aux lignes dont `created_at` coïncide
+// (ex. un import multi-missions où saveMission() horodate plusieurs lignes à la même milliseconde).
+export function compareMissionsForDisplay(a, b) {
+  if (a.intervention_date !== b.intervention_date) return (a.intervention_date || '') < (b.intervention_date || '') ? 1 : -1
+  const ca = a.created_at || '', cb = b.created_at || ''
+  if (ca !== cb) return ca < cb ? 1 : -1
+  return a.id < b.id ? 1 : -1
+}
+
+// `db.missions.orderBy('intervention_date')` seul ne définit aucun ordre secondaire pour les
+// égalités — IndexedDB retombe alors sur la clé primaire (id, un UUID aléatoire), qui n'a aucun
+// rapport avec l'ordre de saisie : deux missions du même jour semblaient alors se réordonner de
+// façon arbitraire (jamais l'ordre attendu, et surtout pas stable avec l'ordre affiché juste après
+// un ajout, où `add()`/`addMany()` placent la nouvelle mission en tête du tableau en mémoire — bug
+// remonté par l'utilisateur : "les missions bougent et se classent aléatoirement une fois submit").
+// `db.missions.toArray()` (pas indexé par intervention_date) inclut aussi, contrairement à l'ancien
+// orderBy(), une ligne dont intervention_date serait manquant/invalide (l'index l'aurait
+// silencieusement exclue) — filtré explicitement ci-dessous pour garder le même comportement, plutôt
+// que de laisser une ligne pareille faire planter le regroupement par date dans MissionsList.jsx.
 export async function loadAll() {
-  const all = await db.missions.orderBy('intervention_date').reverse().toArray()
-  return all.filter(m => m.syncStatus !== 'pending-delete')
+  const all = await db.missions.toArray()
+  const filtered = all.filter(m => m.syncStatus !== 'pending-delete' && m.intervention_date)
+  filtered.sort(compareMissionsForDisplay)
+  return filtered
 }
 
 let onlineListenerAttached = false
