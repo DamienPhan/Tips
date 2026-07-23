@@ -44,14 +44,20 @@ export default function MissionsList({ onEdit }) {
   return (
     <div className="px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-36">
       <div className="relative mb-4">
-        {/* type="search" + autoComplete="off" : sans ça, Safari associe ce champ texte au
-            gestionnaire de mots de passe/Face ID de l'origine (qui a un vrai formulaire de
-            connexion ailleurs dans l'app, voir Auth.jsx) et propose une suggestion d'identifiants
-            au lieu de simplement permettre de taper une recherche. */}
+        {/* Sans ça, Safari associe ce champ texte au trousseau/Face ID de l'origine (qui a un vrai
+            formulaire de connexion ailleurs dans l'app, voir Auth.jsx) et propose une suggestion
+            d'identifiants au lieu de simplement permettre de taper une recherche. `autoComplete="off"`
+            seul ne suffit pas : iOS Safari ignore volontairement cette valeur précise pour les champs
+            qu'il soupçonne d'être liés à une connexion (comportement documenté, pas un bug de l'app) —
+            une valeur non standard ("search-missions", que le navigateur ne reconnaît pas comme mot-clé
+            d'autofill) le contourne plus fiablement. `name`/`id` explicites et neutres évitent aussi
+            que Safari ne retombe sur une heuristique de position/contexte en l'absence de ces attributs. */}
         <input
           type="search" value={query} onChange={e => setQuery(e.target.value)}
           placeholder="Rechercher client, vol, greeteur…"
-          autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck="false"
+          name="mission-search" id="mission-search"
+          autoComplete="search-missions" autoCorrect="off" autoCapitalize="off" spellCheck="false"
+          data-lpignore="true" data-1p-ignore="true"
           className="w-full bg-surface rounded-xl pl-10 pr-3 py-3 text-base placeholder:text-muted/50 outline-none focus:ring-2 focus:ring-amber/40 appearance-none [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden"
         />
         <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">⌕</span>

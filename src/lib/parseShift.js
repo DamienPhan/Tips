@@ -116,6 +116,25 @@ export function parseShifts(text) {
   return out
 }
 
+// Reconstruit un relevé de shifts au format texte accepté par parseShifts() ("d/m : Hh - Hh"),
+// pour permettre de copier/partager ses horaires en texte plutôt qu'un PDF/Excel — et
+// éventuellement les recoller tels quels dans l'import (round-trip, même esprit que
+// formatMissionReport() pour les missions, voir formatReport.js). Un jour OFF travaillé se
+// distingue par un suffixe " (off)" (le seul indice que parseShifts() sait reconnaître, via
+// /off/i.test(rest)). Les jours OFF non travaillés (isRestDay) sont exclus : ce format n'a aucune
+// façon d'encoder un jour sans horaires (parseShifts() exige toujours deux heures), et un jour de
+// repos ne se crée de toute façon jamais par ce biais dans l'app (bouton dédié "Marquer comme jour OFF").
+export function formatShiftsText(shifts) {
+  return shifts
+    .filter(s => !isRestDay(s))
+    .map(s => {
+      const [, mo, d] = s.shift_date.split('-')
+      const line = `${d}/${mo} : ${fmtMinutes(s.start_min)} - ${fmtMinutes(s.end_min)}`
+      return s.is_day_off ? `${line} (off)` : line
+    })
+    .join('\n')
+}
+
 // Recalcule overtime_hours pour un shift existant (toggle OFF / édition horaires).
 export function recompute(shift, isDayOff) {
   const w = workedMin(shift)
