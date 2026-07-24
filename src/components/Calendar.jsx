@@ -186,15 +186,19 @@ export default function Calendar() {
 
           {editing ? (
             <div className="space-y-3">
+              {/* inputMode="text" (pas "numeric") : parseTime() attend un "h" ("7h30"), et le clavier
+                  numérique affiché par inputMode="numeric" sur mobile n'a pas de lettres du tout —
+                  rendant "h" impossible à taper (bug remonté par l'utilisateur : "pas possible de
+                  mettre 7h30"). */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="shift-start" className="text-muted text-xs uppercase tracking-wider mb-1.5 block">Début</label>
-                  <input id="shift-start" inputMode="numeric" value={startStr} onChange={e => setStartStr(e.target.value)} placeholder="7h"
+                  <input id="shift-start" inputMode="text" value={startStr} onChange={e => setStartStr(e.target.value)} placeholder="7h"
                     className="w-full bg-surface-2 rounded-xl px-3.5 py-3 text-base outline-none focus:ring-2 focus:ring-amber/40" />
                 </div>
                 <div>
                   <label htmlFor="shift-end" className="text-muted text-xs uppercase tracking-wider mb-1.5 block">Fin</label>
-                  <input id="shift-end" inputMode="numeric" value={endStr} onChange={e => setEndStr(e.target.value)} placeholder="15h30"
+                  <input id="shift-end" inputMode="text" value={endStr} onChange={e => setEndStr(e.target.value)} placeholder="15h30"
                     className="w-full bg-surface-2 rounded-xl px-3.5 py-3 text-base outline-none focus:ring-2 focus:ring-amber/40" />
                 </div>
               </div>

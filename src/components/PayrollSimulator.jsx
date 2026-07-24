@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useMissions } from '../store/missions'
 import { computePayroll, payrollRows, DEFAULT_RATES } from '../lib/payroll'
-import { fmtHours } from '../lib/parseShift'
+import { fmtHours, formatShiftsText } from '../lib/parseShift'
 import { exportPayrollPdf, exportPayrollXlsx } from '../lib/exportPayroll'
 import { todayLocal } from '../lib/date'
 
@@ -35,6 +35,7 @@ export default function PayrollSimulator() {
   const [monthKey, setMonthKey] = useState(() => todayLocal().slice(0, 7))
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
+  const [copied, setCopied] = useState(false)
 
   // 'hourly' (défaut) : base payée sur les heures réellement pointées. 'monthly' : reproduit le
   // mécanisme "salarié mensualisé" d'un vrai bulletin (base légale fixe + prorata d'absence en
@@ -118,6 +119,23 @@ export default function PayrollSimulator() {
       setError(e.message || String(e))
     }
     setBusy(null)
+  }
+
+  // Copie le relevé d'heures du mois affiché en texte brut (même format que celui accepté à
+  // l'import, "d/m : Hh - Hh" + " (off)" pour un jour OFF travaillé — voir formatShiftsText()) plutôt
+  // qu'un PDF/Excel, pour pouvoir le coller ailleurs (message, note...). `current.rows` : les shifts
+  // du mois calendaire réel tels qu'affichés dans le tableau "Détail des heures" des exports, hors
+  // report/coupure du 25 (une nuance de paie qui n'a pas sa place dans un simple relevé texte).
+  const copyHours = async () => {
+    setError(null)
+    try {
+      await navigator.clipboard.writeText(formatShiftsText(current.rows))
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch (e) {
+      console.error('Copie des heures échouée', e)
+      setError(e.message || String(e))
+    }
   }
 
   return (
@@ -207,6 +225,10 @@ export default function PayrollSimulator() {
           <button onClick={() => run('pdf-hours')} disabled={busy}
             className="w-full bg-surface-2 text-[#E6E9EF] rounded-xl py-3 text-sm font-medium active:bg-white/10 mt-2 disabled:opacity-50">
             {busy === 'pdf-hours' ? '…' : 'PDF (heures)'}
+          </button>
+          <button onClick={copyHours} disabled={busy || current.rows.length === 0}
+            className="w-full bg-surface-2 text-[#E6E9EF] rounded-xl py-3 text-sm font-medium active:bg-white/10 mt-2 disabled:opacity-50">
+            {copied ? 'Copié !' : 'Copier les heures (texte)'}
           </button>
           {error && <p className="text-error text-xs mt-2">L'export a échoué : {error}</p>}
         </>
