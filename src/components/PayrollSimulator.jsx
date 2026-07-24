@@ -36,6 +36,7 @@ export default function PayrollSimulator() {
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
   const [copied, setCopied] = useState(false)
+  const [copyError, setCopyError] = useState(null)
 
   // 'hourly' (défaut) : base payée sur les heures réellement pointées. 'monthly' : reproduit le
   // mécanisme "salarié mensualisé" d'un vrai bulletin (base légale fixe + prorata d'absence en
@@ -126,16 +127,22 @@ export default function PayrollSimulator() {
   // qu'un PDF/Excel, pour pouvoir le coller ailleurs (message, note...). `current.rows` : les shifts
   // du mois calendaire réel tels qu'affichés dans le tableau "Détail des heures" des exports, hors
   // report/coupure du 25 (une nuance de paie qui n'a pas sa place dans un simple relevé texte).
+  // `busy('copy')` rend ce bouton mutuellement exclusif avec les exports PDF/Excel (comme eux entre
+  // eux) ; `copyError` reste distinct de `error` (export) pour ne pas afficher "L'export a échoué"
+  // quand seule la copie presse-papiers a échoué — les deux erreurs sont sans rapport pour l'utilisateur
+  // (bug trouvé en review : les deux partageaient le même état avant ce correctif).
   const copyHours = async () => {
-    setError(null)
+    setBusy('copy')
+    setCopyError(null)
     try {
       await navigator.clipboard.writeText(formatShiftsText(current.rows))
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch (e) {
       console.error('Copie des heures échouée', e)
-      setError(e.message || String(e))
+      setCopyError(e.message || String(e))
     }
+    setBusy(null)
   }
 
   return (
@@ -228,9 +235,10 @@ export default function PayrollSimulator() {
           </button>
           <button onClick={copyHours} disabled={busy || current.rows.length === 0}
             className="w-full bg-surface-2 text-[#E6E9EF] rounded-xl py-3 text-sm font-medium active:bg-white/10 mt-2 disabled:opacity-50">
-            {copied ? 'Copié !' : 'Copier les heures (texte)'}
+            {busy === 'copy' ? '…' : copied ? 'Copié !' : 'Copier les heures (texte)'}
           </button>
           {error && <p className="text-error text-xs mt-2">L'export a échoué : {error}</p>}
+          {copyError && <p className="text-error text-xs mt-2">La copie a échoué : {copyError}</p>}
         </>
       )}
     </div>

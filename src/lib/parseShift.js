@@ -158,9 +158,15 @@ export function fmtHours(h) {
   return mm ? `${hh}h${String(mm).padStart(2, '0')}` : `${hh}h`
 }
 
-// Heure d'horloge depuis des minutes (start_min/end_min).
+// Heure d'horloge depuis des minutes (start_min/end_min). Défensif comme workedMin()/nightBreakdown()
+// ci-dessus (voir leur commentaire) : un start_min/end_min manquant/corrompu donnait "NaNh" au lieu
+// d'un échec propre — trouvé en review sur formatShiftsText(), qui aurait pu copier une ligne
+// illisible dans le presse-papiers pour un shift legacy corrompu. Même sentinelle "—" que fmtClock()
+// dans shiftRows.js (duplication existante, pas fusionnée ici pour rester ciblé sur le bug trouvé).
 export function fmtMinutes(min) {
-  const h = Math.floor(min / 60) % 24
-  const m = min % 60
+  const n = Number(min)
+  if (!Number.isFinite(n)) return '—'
+  const h = Math.floor(n / 60) % 24
+  const m = ((n % 60) + 60) % 60
   return m ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`
 }
