@@ -27,11 +27,13 @@ function payrollCutoffMonthKey(dateStr) {
 //   (coupure au 25).
 // Un shift daté du 27 juin par ex. apparaît dans le relevé de juin avec ses heures normales, mais
 // sa part d'heures sup ET ses heures de nuit rejoignent le total du bulletin de juillet, pas celui
-// de juin. `total.overtimeCarriedIn` isole la part sup/jour OFF reportée (les deux confondues,
-// puisque payroll.js les fusionne dans le même pool — pas un total à part) — sert à l'affichage
-// informatif de payrollRows() (voir payroll.js) ; les heures de nuit reportées n'ont pas leur propre
-// sous-total équivalent (pas de ligne "Dont nuit du mois dernier" demandée), seul `total.night`
-// reflète directement la bonne coupure.
+// de juin. `total.overtimeCarriedIn`/`total.offWorkedCarriedIn` isolent la part sup / jour OFF
+// reportée — deux sous-totaux séparés, pas un seul fusionné, depuis que payroll.js ne mélange plus
+// les heures sup normales et les heures de jour OFF travaillé dans le même pool tiéré (l'utilisateur
+// a précisé que les heures OFF sont une prime à part, toujours +25%, hors du total heures sup) —
+// chacun sert à l'affichage informatif de sa propre ligne "Dont..." dans payrollRows() (voir
+// payroll.js). Les heures de nuit reportées n'ont pas de sous-total équivalent (pas de ligne
+// "Dont nuit du mois dernier" demandée), seul `total.night` reflète directement la bonne coupure.
 // Avec les shifts sources eux-mêmes (`carriedInRows` ci-dessous), on les fait aussi apparaître dans
 // le tableau "Détail des heures" du mois de paie où leur majoration (sup ET/OU nuit) est
 // effectivement comptée, pas seulement dans celui du mois calendaire où ils sont datés.
@@ -74,7 +76,7 @@ function dedupeByDate(shifts) {
 export function monthlyDetail(shifts) {
   shifts = dedupeByDate(shifts)
   const calendarMap = new Map() // mois calendaire -> shifts (relevé, heures normales)
-  const cutoffMap = new Map()   // mois de paie -> { overtime, overtimeCarriedIn, offWorked, night, carriedInRows }
+  const cutoffMap = new Map()   // mois de paie -> { overtime, overtimeCarriedIn, offWorked, offWorkedCarriedIn, night, carriedInRows }
 
   for (const s of shifts) {
     // dedupeByDate() ci-dessus a déjà écarté les lignes corrompues (date manquante) avant d'atteindre cette boucle.
@@ -83,7 +85,7 @@ export function monthlyDetail(shifts) {
     calendarMap.get(calKey).push(s)
 
     const cutKey = payrollCutoffMonthKey(s.shift_date)
-    if (!cutoffMap.has(cutKey)) cutoffMap.set(cutKey, { overtime: 0, overtimeCarriedIn: 0, offWorked: 0, night: 0, carriedInRows: [] })
+    if (!cutoffMap.has(cutKey)) cutoffMap.set(cutKey, { overtime: 0, overtimeCarriedIn: 0, offWorked: 0, offWorkedCarriedIn: 0, night: 0, carriedInRows: [] })
     const bucket = cutoffMap.get(cutKey)
     const otHours = Number(s.overtime_hours || 0)
     if (s.is_day_off) bucket.offWorked += otHours
@@ -95,16 +97,18 @@ export function monthlyDetail(shifts) {
     // cutKey ne matche le mois calendaire du shift que pour les jours 1-25 (voir
     // payrollCutoffMonthKey) : si les deux diffèrent, ce shift est daté du 26-fin du mois calendaire
     // précédent et sa majoration (sup normale OU jour OFF travaillé OU heures de nuit — toutes
-    // suivent la même coupure) est reportée dans le bulletin de cutKey — on isole le sous-total
-    // sup/jour OFF (overtimeCarriedIn, is_day_off inclus puisque les deux alimentent le même pool sup
-    // pour la ligne informative "Dont..." de payrollRows() ; les heures de nuit n'ont pas de
-    // sous-total "carried in" équivalent, `bucket.night` ci-dessus suffit puisqu'aucune ligne
-    // informative ne le détaille séparément) et on garde systématiquement le shift source pour
-    // l'afficher dans le relevé "Détail des heures" du mois de paie où sa majoration compte
-    // réellement — sans ça, un jour OFF travaillé reporté n'apparaissait dans AUCUN tableau tout en
-    // générant une prime avec un montant dans le récapitulatif (bug trouvé en review).
+    // suivent la même coupure) est reportée dans le bulletin de cutKey — on isole deux sous-totaux
+    // séparés (overtimeCarriedIn pour la sup normale, offWorkedCarriedIn pour le jour OFF, plus un
+    // seul pool fusionné depuis que payroll.js les traite comme deux primes distinctes) pour les
+    // lignes informatives "Dont..." de payrollRows() ; les heures de nuit n'ont pas de sous-total
+    // "carried in" équivalent, `bucket.night` ci-dessus suffit puisqu'aucune ligne informative ne le
+    // détaille séparément. Le shift source est systématiquement gardé pour l'afficher dans le relevé
+    // "Détail des heures" du mois de paie où sa majoration compte réellement — sans ça, un jour OFF
+    // travaillé reporté n'apparaissait dans AUCUN tableau tout en générant une prime avec un montant
+    // dans le récapitulatif (bug trouvé en review).
     if (cutKey !== calKey && carriesOver(s)) {
-      bucket.overtimeCarriedIn += otHours
+      if (s.is_day_off) bucket.offWorkedCarriedIn += otHours
+      else bucket.overtimeCarriedIn += otHours
       bucket.carriedInRows.push(s)
     }
   }
@@ -122,7 +126,7 @@ export function monthlyDetail(shifts) {
     const rows = (calendarMap.get(key) || []).filter(s => !isRestDay(s)).sort((a, b) => (a.shift_date < b.shift_date ? -1 : 1))
     // Heures normales = un forfait fixe de 7h30 (NORMAL_SHIFT_MIN) par jour travaillé, pas le brut
     // moins la part sup — vérifié contre le relevé réel de l'utilisateur. Un jour OFF travaillé ne
-    // compte pas du tout ici : ses heures rejoignent entièrement le pool sup (voir payroll.js).
+    // compte pas du tout ici : ses heures rejoignent entièrement sa propre prime à part (voir payroll.js).
     const baseHours = rows.reduce((sum, s) => {
       if (s.is_day_off) return sum
       const workedMin = Number(s.hours || 0) * 60
@@ -134,7 +138,7 @@ export function monthlyDetail(shifts) {
     // Durée ne suit jamais la coupure) mais doivent être exclus du total Sup/OFF trav./Nuit de CE
     // mois-ci (voir shiftTotalsRow() dans shiftRows.js) et signalés séparément à l'affichage.
     const carriedOutRows = rows.filter(s => payrollCutoffMonthKey(s.shift_date) !== key && carriesOver(s))
-    const cutoff = cutoffMap.get(key) || { overtime: 0, overtimeCarriedIn: 0, offWorked: 0, night: 0, carriedInRows: [] }
+    const cutoff = cutoffMap.get(key) || { overtime: 0, overtimeCarriedIn: 0, offWorked: 0, offWorkedCarriedIn: 0, night: 0, carriedInRows: [] }
     const carriedInRows = cutoff.carriedInRows.slice().sort((a, b) => (a.shift_date < b.shift_date ? -1 : 1))
     // Précalculés ici plutôt que recalculés indépendamment dans exportPayrollPdf et exportPayrollXlsx
     // (qui en avaient chacun leur propre copie identique) — même rationale que BOOKING_FIELD_RE dans
@@ -156,7 +160,10 @@ export function monthlyDetail(shifts) {
       // night vient de cutoff (mois de paie), pas d'un reduce sur `rows` (mois calendaire) — les
       // heures de nuit suivent la même coupure au 25 que les heures sup, voir le commentaire en
       // haut de fichier.
-      total: { baseHours, overtime: cutoff.overtime, overtimeCarriedIn: cutoff.overtimeCarriedIn, offWorked: cutoff.offWorked, night: cutoff.night }
+      total: {
+        baseHours, overtime: cutoff.overtime, overtimeCarriedIn: cutoff.overtimeCarriedIn,
+        offWorked: cutoff.offWorked, offWorkedCarriedIn: cutoff.offWorkedCarriedIn, night: cutoff.night
+      }
     }
   })
 }
