@@ -188,7 +188,44 @@ export default function Home() {
       </section>
 
       <DispatchSection missions={missions} revealed={revealed} onToggle={toggleRevealed} />
+
+      <RecalcShiftsSection />
     </div>
+  )
+}
+
+// Outil de réparation ponctuel : recalcule les heures (hours/overtime_hours/night_hours) de tous
+// les shifts dont les champs dérivés ne correspondent plus à recompute() — typiquement des jours
+// OFF travaillés enregistrés avant la pause 1h à partir de la 7e heure, ou avant la séparation du
+// pool d'heures sup. À retirer une fois que l'app n'a plus de shifts concernés (même convention que
+// l'outil équivalent utilisé une fois pour les heures de nuit, voir CLAUDE.md).
+function RecalcShiftsSection() {
+  const recalcAllShifts = useMissions(s => s.recalcAllShifts)
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(null)
+
+  const run = async () => {
+    setBusy(true)
+    try {
+      const n = await recalcAllShifts()
+      setDone(n)
+    } catch (e) {
+      console.error('Recalcul des heures échoué', e)
+      setDone(`erreur : ${e.message || e}`)
+    }
+    setBusy(false)
+  }
+
+  return (
+    <section className="bg-surface rounded-2xl p-4 mt-4">
+      <h3 className="font-medium text-sm mb-1">Réparation : recalcul des heures</h3>
+      <p className="text-muted text-xs mb-3">Recalcule les heures (dont la pause des jours OFF travaillés) de tous les shifts si un calcul a changé depuis leur saisie.</p>
+      <button onClick={run} disabled={busy}
+        className="w-full bg-surface-2 text-[#E6E9EF] rounded-xl py-3 text-sm font-medium active:bg-white/10 disabled:opacity-50">
+        {busy ? '…' : 'Recalculer les heures'}
+      </button>
+      {done != null && <p className="text-synced text-xs mt-2">{done} shift(s) corrigé(s).</p>}
+    </section>
   )
 }
 

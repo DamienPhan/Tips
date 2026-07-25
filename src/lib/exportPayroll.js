@@ -137,11 +137,12 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate, options = {})
       // parseShift.js) : la pause d'1h qui sépare ce seuil des 7h30 d'"heures normales" est donc
       // déjà retirée avant que les heures sup ne commencent à être comptées ici — précisé pour ne
       // pas laisser croire que la pause a été oubliée quand la colonne Sup paraît plus basse
-      // qu'attendu pour un shift donné.
+      // qu'attendu pour un shift donné. OFF trav. a la même mécanique avec un seuil différent
+      // (OFF_DAY_BREAK_THRESHOLD_MIN, 7h) — précisé pour la même raison.
       doc.setFont(FONT, 'italic')
       doc.setFontSize(7.5)
       doc.setTextColor(120)
-      doc.text('Sup : heure de pause (1h) déjà retirée du calcul.', marginX + 4, y)
+      doc.text("Sup : heure de pause (1h) déjà retirée du calcul. OFF trav. : idem à partir de la 7e heure.", marginX + 4, y)
       doc.setTextColor(0)
       doc.setFont(FONT, 'normal')
       y += 7
@@ -386,7 +387,7 @@ export async function exportPayrollXlsx(payrollByMonth, hourlyRate) {
     addRow(['Simulation indicative'], { italic: true })
     addRow([])
     addRow(['DÉTAIL DES HEURES'], { bold: true, size: 12 })
-    addRow(['Sup : heure de pause (1h) déjà retirée du calcul.'], { italic: true })
+    addRow(['Sup : heure de pause (1h) déjà retirée du calcul. OFF trav. : idem à partir de la 7e heure.'], { italic: true })
     const headRow2 = addRow(SHIFT_TABLE_HEAD, { bold: true, fill: AMBER_TINT_ARGB })
     // carriedInRows/carriedOutRows/ownCountedRows/cutoffRows sont précalculés par monthlyDetail() —
     // même source que exportPayrollPdf, voir son commentaire, pour que les deux exports restent

@@ -9,7 +9,7 @@ export const DEFAULT_RATES = {
   // défaut). Le pool reste agrégé au mois entier, pas semaine civile par semaine civile (voir la
   // note sur la coupure du 25 dans monthlyDetail.js).
   overtimeThresholdHours: 33,
-  overtimeMultiplierLow: 1.25, // heures sup jusqu'au seuil
+  overtimeMultiplierLow: 1.25, // heures sup jusqu'au seuil — aussi le taux des heures de jour OFF travaillé (voir plus bas)
   overtimeMultiplierHigh: 1.5, // heures sup au-delà du seuil
   nightBonusRate: 0.25,        // prime de nuit, en supplément du taux de base
   weeklyBaseHours: 35,         // base légale hebdomadaire — mode "Mensualisé" uniquement
@@ -22,16 +22,17 @@ export const DEFAULT_RATES = {
 }
 
 // Calcule la simulation de paie pour un mois (élément retourné par monthlyDetail()).
-// Les heures d'un jour OFF travaillé sont des heures sup comme les autres pour la paie : elles
-// rejoignent le même pool majoré à 25%/50% avec le même seuil mensuel que les heures sup
-// normales, au lieu d'une prime à part à +25% plat (vérifié auprès de l'utilisateur — l'employeur ne
-// fait pas de distinction, contrairement à une hypothèse antérieure basée sur une lecture différente
-// d'un bulletin de salaire). Les heures de nuit restent en revanche une prime à part, +25% en plus du
-// taux de base sur chaque heure de nuit, hors du pool sup et de son seuil. Le "Détail des heures"
-// (relevé jour par jour) continue d'afficher Sup/OFF trav. dans deux colonnes séparées — utile pour
-// savoir quels jours étaient officiellement des jours OFF — mais côté paie, l'argent est calculé sur
-// le total fusionné ; `offWorkedHours` reste exposé (voir plus bas) uniquement pour une ligne
-// informative dans payrollRows(), sans montant propre.
+// Les heures d'un jour OFF travaillé sont une prime à part, payées en intégralité à +25% (même taux
+// que le premier palier du pool sup, `overtimeMultiplierLow`), mais HORS du pool sup tiéré et de son
+// seuil — elles ne comptent pas dans le total "heures supplémentaires" (précisé par l'utilisateur).
+// Ça a déjà changé de sens une fois : une version antérieure les fusionnait dans le même pool que les
+// heures sup normales (même seuil de 33h/34h, mêmes deux paliers +25%/+50%), sur la base d'une
+// clarification de l'utilisateur disant que l'employeur ne faisait pas de distinction — corrigé une
+// seconde fois après une clarification plus précise : payées au même taux que la sup normale, oui,
+// mais sans jamais compter dans le total sup ni pousser le pool vers le palier +50%. Les heures de
+// nuit restent une prime à part, +25% en plus du taux de base sur chaque heure de nuit, hors du pool
+// sup et de son seuil (inchangé). Le "Détail des heures" (relevé jour par jour) continue d'afficher
+// Sup/OFF trav. dans deux colonnes séparées, comme les deux montants côté paie maintenant aussi.
 //
 // options.payMode : 'hourly' (défaut) calcule la base sur les heures réellement pointées ;
 // 'monthly' reproduit le mécanisme "salarié mensualisé" observé sur un vrai bulletin de salaire —
@@ -64,22 +65,26 @@ export function computeMonthPayroll(month, hourlyRate, rates = DEFAULT_RATES, op
   } else {
     // total.baseHours est un forfait de 7h30/jour travaillé, pas les heures réelles moins la part
     // sup (voir monthlyDetail.js) — un jour OFF travaillé n'y compte pas du tout, ses heures sont
-    // entièrement dans le pool sup ci-dessous (fusionné avec les vraies heures sup).
+    // entièrement dans sa propre prime à part ci-dessous.
     baseHours = total.baseHours
     baseAmount = baseHours * hourlyRate
   }
 
-  // Pool fusionné : heures sup normales + heures d'un jour OFF travaillé, tiérées ensemble sur le
-  // même seuil mensuel (voir DEFAULT_RATES.overtimeThresholdHours ci-dessus).
-  const overtimePoolHours = total.overtime + offWorkedHours
+  // Pool tiéré : heures sup normales SEULEMENT — les heures d'un jour OFF travaillé n'y comptent
+  // plus (voir le commentaire au-dessus de cette fonction).
+  const overtimePoolHours = total.overtime
   const overtimeLowHours = Math.min(overtimePoolHours, rates.overtimeThresholdHours)
   const overtimeHighHours = Math.max(0, overtimePoolHours - rates.overtimeThresholdHours)
   const overtimeLowAmount = overtimeLowHours * hourlyRate * rates.overtimeMultiplierLow
   const overtimeHighAmount = overtimeHighHours * hourlyRate * rates.overtimeMultiplierHigh
 
+  // Heures d'un jour OFF travaillé : prime à part, payées en intégralité au même taux que le premier
+  // palier du pool sup (+25%), jamais tiérée ni comptée dans overtimePoolHours ci-dessus.
+  const offWorkedAmount = offWorkedHours * hourlyRate * rates.overtimeMultiplierLow
+
   const nightBonus = total.night * hourlyRate * rates.nightBonusRate
 
-  const grossTotal = baseAmount + overtimeLowAmount + overtimeHighAmount + nightBonus
+  const grossTotal = baseAmount + overtimeLowAmount + overtimeHighAmount + offWorkedAmount + nightBonus
 
   // Estimation forfaitaire des cotisations salariales sur le brut total (voir le commentaire de
   // DEFAULT_RATES.employeeCotisationRate) — pas un calcul détaillé, juste une approximation.
@@ -91,10 +96,11 @@ export function computeMonthPayroll(month, hourlyRate, rates = DEFAULT_RATES, op
     payMode,
     baseHours, baseAmount,
     fullBaseHours, fullBaseAmount, absenceDays, absenceHours, absenceAmount,
-    offWorkedHours,
+    offWorkedHours, offWorkedAmount,
     overtimeThresholdHours: rates.overtimeThresholdHours,
     overtimeLowHours, overtimeHighHours, overtimeLowAmount, overtimeHighAmount,
     overtimeCarriedInHours: total.overtimeCarriedIn,
+    offWorkedCarriedInHours: total.offWorkedCarriedIn,
     nightHours: total.night, nightBonus,
     grossTotal,
     cotisationRate, cotisationAmount, netTotal
@@ -144,14 +150,6 @@ export function payrollRows(p) {
   if (p.overtimeCarriedInHours > 0) {
     rows.push({ label: 'Dont heures sup. du mois dernier (déjà incluses ci-dessous)', hours: p.overtimeCarriedInHours, amount: null })
   }
-  // Même principe que la ligne "Dont... du mois dernier" ci-dessus : les heures d'un jour OFF
-  // travaillé sont fusionnées dans le pool sup (voir computeMonthPayroll()), donc déjà comptées et
-  // payées dans les deux lignes "Heures sup..." qui suivent — cette ligne est purement informative
-  // (amount: null), pour que le lecteur sache combien de ce total vient d'un jour OFF plutôt que
-  // d'heures sup normales, sans dupliquer le montant.
-  if (p.offWorkedHours > 0) {
-    rows.push({ label: 'Dont heures travaillées en OFF (déjà incluses ci-dessous)', hours: p.offWorkedHours, amount: null })
-  }
   // Seuil affiché dynamiquement plutôt qu'en dur dans le texte : ce seuil a déjà changé deux fois
   // en pratique (33 → une approximation hebdomadaire non ronde → 33 à nouveau) — un libellé figé
   // se désynchroniserait silencieusement de la vraie valeur utilisée pour le calcul à chaque
@@ -159,8 +157,17 @@ export function payrollRows(p) {
   const thresholdLabel = fmtHours(p.overtimeThresholdHours)
   rows.push(
     { label: `Heures sup jusqu'à ${thresholdLabel} (+25%)`, hours: p.overtimeLowHours, amount: p.overtimeLowAmount },
-    { label: `Heures sup au-delà de ${thresholdLabel} (+50%)`, hours: p.overtimeHighHours, amount: p.overtimeHighAmount },
-    { label: 'Prime de nuit (+25%)', hours: p.nightHours, amount: p.nightBonus }
+    { label: `Heures sup au-delà de ${thresholdLabel} (+50%)`, hours: p.overtimeHighHours, amount: p.overtimeHighAmount }
   )
+  // Prime à part, plus dans le pool sup ci-dessus (voir computeMonthPayroll()) — a donc désormais son
+  // propre montant, contrairement à l'ancienne ligne purement informative "Dont... (déjà incluses
+  // ci-dessous)" qui n'avait plus de sens une fois le pool dé-fusionné.
+  if (p.offWorkedCarriedInHours > 0) {
+    rows.push({ label: 'Dont heures travaillées en OFF du mois dernier (déjà incluses ci-dessous)', hours: p.offWorkedCarriedInHours, amount: null })
+  }
+  if (p.offWorkedHours > 0) {
+    rows.push({ label: 'Heures travaillées en OFF (+25%)', hours: p.offWorkedHours, amount: p.offWorkedAmount })
+  }
+  rows.push({ label: 'Prime de nuit (+25%)', hours: p.nightHours, amount: p.nightBonus })
   return rows
 }

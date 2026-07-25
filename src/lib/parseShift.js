@@ -7,6 +7,11 @@ export const BASE_SHIFT_MIN = 510   // 8h30
 export const NORMAL_SHIFT_MIN = 450 // 7h30
 export const NIGHT_START = 22 * 60  // 22h00
 export const NIGHT_END = 7 * 60     // 07h00
+// Un jour OFF travaillé de 7h ou plus a lui aussi une pause implicite d'1h retirée du décompte
+// majoré (ex. 8h travaillées → 7h majorées) — précisé par l'utilisateur, distinct du seuil des
+// jours normaux (8h30/7h30 ci-dessus) : ici la pause ne s'applique qu'à partir de 7h, pas avant.
+export const OFF_DAY_BREAK_THRESHOLD_MIN = 420 // 7h
+export const OFF_DAY_BREAK_MIN = 60            // 1h
 
 // Une minute absolue (peut dépasser 1440) est-elle en plage nuit 22h-7h ?
 function isNight(absMin) {
@@ -65,15 +70,19 @@ export function workedMin(shift) {
   return end - start
 }
 
-// Minutes supplémentaires réelles (temps effectivement travaillé) : tout le shift si OFF, sinon au-delà de 8h30.
+// Minutes supplémentaires réelles (temps effectivement travaillé) : tout le shift si OFF (moins la
+// pause d'1h au-delà de 7h, voir OFF_DAY_BREAK_THRESHOLD_MIN), sinon au-delà de 8h30. `hours` (la
+// durée brute du shift) n'est jamais affecté par cette pause — seul le décompte majoré l'est, même
+// logique que BASE_SHIFT_MIN/NORMAL_SHIFT_MIN pour un jour normal (voir plus haut).
 export function overtimeMin(workedMinutes, isDayOff) {
-  if (isDayOff) return workedMinutes
+  if (isDayOff) return workedMinutes >= OFF_DAY_BREAK_THRESHOLD_MIN ? workedMinutes - OFF_DAY_BREAK_MIN : workedMinutes
   return Math.max(0, workedMinutes - BASE_SHIFT_MIN)
 }
 
 // Minutes supplémentaires "payées" : un jour OFF travaillé n'a plus de majoration propre ici —
-// ses heures (déjà comptées en intégralité par overtimeMin) sont ensuite traitées comme des
-// heures sup normales, majorées uniquement au niveau de la paie mensuelle (voir payroll.js).
+// ses heures (déjà comptées, pause déduite, par overtimeMin) sont ensuite traitées comme une prime
+// à part au niveau de la paie mensuelle (voir payroll.js) — plus dans le pool sup tiéré depuis que
+// l'utilisateur a précisé qu'elles ne doivent pas compter dans le total heures sup.
 export function overtimePayMin(workedMinutes, isDayOff) {
   return overtimeMin(workedMinutes, isDayOff)
 }
