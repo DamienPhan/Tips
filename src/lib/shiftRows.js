@@ -16,6 +16,17 @@ function dayName(dateStr) {
   return DOW[parseLocal(dateStr).getDay()]
 }
 
+// DD/MM/YY plutôt que le YYYY-MM-DD brut de shift_date (illisible dans le PDF/Excel) — demandé par
+// l'utilisateur après avoir comparé l'export à ses propres notes, qui utilisent ce format.
+function fmtDateFr(dateStr) {
+  if (!dateStr) return '—'
+  const d = parseLocal(dateStr)
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const yy = String(d.getFullYear()).slice(-2)
+  return `${dd}/${mm}/${yy}`
+}
+
 // Détail jour par jour d'un mois de shifts — utilisé par le relevé d'heures et le PDF de paie.
 // Pas de colonne "Sup nuit" (heures sup ET de nuit à la fois) : trop de catégories qui se chevauchent
 // avec Sup/Nuit rendaient le tableau confus, et cette valeur n'est de toute façon jamais utilisée
@@ -24,7 +35,7 @@ export const SHIFT_TABLE_HEAD = ['Date', 'Jour', 'Horaires', 'Durée', 'Sup', 'O
 
 export function shiftRowCells(s) {
   return [
-    s.shift_date,
+    fmtDateFr(s.shift_date),
     dayName(s.shift_date),
     isRestDay(s) ? 'OFF' : `${fmtClock(s.start_min)} – ${fmtClock(s.end_min)}`,
     fmtHours(s.hours),
