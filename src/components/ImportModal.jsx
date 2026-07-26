@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { parseImport } from '../lib/parseImport'
 import { recompute, fmtMinutes, fmtHours } from '../lib/parseShift'
+import { fmtDateFr } from '../lib/date'
 import { useMissions } from '../store/missions'
 
 const SERVICE_LABEL = { ARR: 'Arrivée', DEP: 'Départ', TRANSIT: 'Transit' }
@@ -82,7 +83,7 @@ export default function ImportModal({ onClose, onManual }) {
                 <div key={i} className="bg-surface rounded-xl px-4 py-3 flex justify-between gap-3">
                   <div className="min-w-0">
                     <span className="font-medium truncate block">{m.client_name || 'Client inconnu'}</span>
-                    <p className="text-muted text-xs mt-0.5 truncate">{m.intervention_date} · {SERVICE_LABEL[m.service_type]}{m.flight_code ? ` · ${m.flight_code}` : ''} · {m.pax_count} pax</p>
+                    <p className="text-muted text-xs mt-0.5 truncate">{fmtDateFr(m.intervention_date)} · {SERVICE_LABEL[m.service_type]}{m.flight_code ? ` · ${m.flight_code}` : ''} · {m.pax_count} pax</p>
                   </div>
                   <span className="text-muted/60 text-xs shrink-0">#{m.booking_ref || '—'}</span>
                 </div>
@@ -99,7 +100,7 @@ export default function ImportModal({ onClose, onManual }) {
                 <button key={i} onClick={() => setOffFlags({ ...offFlags, [i]: !offFlags[i] })}
                   className="w-full bg-surface rounded-xl px-4 py-3 flex items-center justify-between gap-3 text-left">
                   <div>
-                    <span className="text-sm">{s.shift_date}</span>
+                    <span className="text-sm">{fmtDateFr(s.shift_date)}</span>
                     <p className="text-muted text-xs mt-0.5">{fmtMinutes(s.start_min)} – {fmtMinutes(s.end_min)} · {fmtHours(s.hours)}</p>
                   </div>
                   <span className={`text-xs rounded-full px-3 py-1 ${offFlags[i] ? 'bg-error/15 text-error' : 'bg-surface-2 text-muted'}`}>

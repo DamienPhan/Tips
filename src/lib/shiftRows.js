@@ -1,5 +1,5 @@
 import { isRestDay, fmtHours } from './parseShift'
-import { parseLocal } from './date'
+import { parseLocal, fmtDateFr } from './date'
 
 const DOW = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
 
@@ -14,17 +14,6 @@ function fmtClock(min) {
 function dayName(dateStr) {
   if (!dateStr) return '—'
   return DOW[parseLocal(dateStr).getDay()]
-}
-
-// DD/MM/YY plutôt que le YYYY-MM-DD brut de shift_date (illisible dans le PDF/Excel) — demandé par
-// l'utilisateur après avoir comparé l'export à ses propres notes, qui utilisent ce format.
-function fmtDateFr(dateStr) {
-  if (!dateStr) return '—'
-  const d = parseLocal(dateStr)
-  const dd = String(d.getDate()).padStart(2, '0')
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const yy = String(d.getFullYear()).slice(-2)
-  return `${dd}/${mm}/${yy}`
 }
 
 // Détail jour par jour d'un mois de shifts — utilisé par le relevé d'heures et le PDF de paie.
