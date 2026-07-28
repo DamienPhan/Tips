@@ -6,22 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A single-user (mono-utilisateur) mobile-first PWA for tracking airport-porter missions ("interventions") and tips ("pourboires"). It's a personal app, separate from the (external) schedule-extractor tool — it only consumes reports produced elsewhere. All UI copy, comments, and domain terms are in French; keep new code consistent with that.
 
-## Commands
-
-```
-npm install
-npm run dev       # vite dev server
-npm run build      # production build to dist/
-npm run preview    # preview the production build
-```
-
-There is no test suite and no linter configured in this repo.
-
 Requires `.env.local` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (see README.md for full Supabase project setup — schema lives in `supabase/schema.sql` and must be run manually in the Supabase SQL editor; public signups must be disabled since this is single-user).
 
 ## Architecture
 
-**Stack**: React + Vite, Tailwind CSS v4 (config lives in `@theme` inside `src/index.css`, not a tailwind.config file), zustand for state, Dexie (IndexedDB) for local cache, Supabase (Postgres + Auth) as the remote source of truth, vite-plugin-pwa for installability.
+**Stack note**: Tailwind CSS v4's config lives in `@theme` inside `src/index.css`, not a `tailwind.config.js` file — the usual convention doesn't apply here.
 
 **Two domain entities**, both synced the same way: `missions` (an intervention/job) and `work_shifts` (a workday, used to compute €/hour — also doubles as the record of OFF days, worked or not, see the Shift/overtime math note below). Postgres schema, including RLS policies scoped by `auth.uid() = user_id`, is in `supabase/schema.sql`.
 
