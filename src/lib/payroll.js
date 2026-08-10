@@ -22,10 +22,15 @@ export const DEFAULT_RATES = {
   weeklyBaseHours: 35,         // base légale hebdomadaire — mode "Mensualisé" uniquement
   // Cotisations salariales : taux forfaitaire, pas un détail poste par poste (santé/retraite/
   // chômage/CSG-CRDS/mutuelle...) — bien trop spécifique au contrat et à la convention collective
-  // pour être répliqué fiablement ici. Valeur par défaut dérivée d'un vrai bulletin (non-cadre) :
-  // brut 1179.05 € → net avant impôt 906.72 €, soit (1179.05-906.72)/1179.05 ≈ 23.1% de retenues.
-  // Éditable dans le simulateur, à ajuster si le profil (cadre/mutuelle/etc.) diffère.
-  employeeCotisationRate: 0.231
+  // pour être répliqué fiablement ici. Un premier bulletin (non-cadre, peu d'heures sup) donnait
+  // brut 1179.05 € → net avant impôt 906.72 €, soit ≈23.1% de retenues — mais un second bulletin
+  // (juillet 2026, avec beaucoup d'heures sup) donne brut 3109.74 € → net avant impôt 2528.87 €,
+  // soit ≈18.7% seulement : les heures sup bénéficient d'une exonération de cotisations salariales
+  // (lignes "EXO., ECRET. ET ALLEG. COTIS" / "RÉDUCTION SALARIALE HS/HC" du bulletin), donc le taux
+  // réel baisse les mois à forte activité au lieu de rester fixe. 19% est un compromis choisi par
+  // l'utilisateur entre les deux, pas une moyenne calculée — reste éditable dans le simulateur pour
+  // approcher le taux réel du mois simulé.
+  employeeCotisationRate: 0.19
 }
 
 // Calcule la simulation de paie pour un mois (élément retourné par monthlyDetail()).

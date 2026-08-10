@@ -6,6 +6,9 @@ import { exportPayrollPdf, exportPayrollXlsx } from '../lib/exportPayroll'
 import { todayLocal } from '../lib/date'
 
 const RATE_KEY = 'payroll:hourlyRate'
+// Taux horaire réel de l'utilisateur (fiche de paie non-cadre, "Taux salarial" de la ligne SALAIRE
+// DE BASE) — remplace l'ancienne valeur placeholder 12.5.
+const DEFAULT_HOURLY_RATE = 13.5162
 const PAY_MODE_KEY = 'payroll:payMode'
 const WEEKLY_BASE_HOURS_KEY = 'payroll:weeklyBaseHours'
 const ABSENCE_DAYS_KEY = 'payroll:absenceDays'
@@ -30,8 +33,8 @@ function isStaleChunkError(e) {
 
 export default function PayrollSimulator() {
   const shifts = useMissions(s => s.shifts)
-  const [hourlyRate, setHourlyRate] = useState(() => Number(localStorage.getItem(RATE_KEY)) || 12.5)
-  const [rateDraft, setRateDraft] = useState(() => String(Number(localStorage.getItem(RATE_KEY)) || 12.5).replace('.', ','))
+  const [hourlyRate, setHourlyRate] = useState(() => Number(localStorage.getItem(RATE_KEY)) || DEFAULT_HOURLY_RATE)
+  const [rateDraft, setRateDraft] = useState(() => String(Number(localStorage.getItem(RATE_KEY)) || DEFAULT_HOURLY_RATE).replace('.', ','))
   const [monthKey, setMonthKey] = useState(() => todayLocal().slice(0, 7))
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
