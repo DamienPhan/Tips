@@ -47,16 +47,31 @@ export const DEFAULT_RATES = {
 // 13.5162 €/h (7.00 × 13.5162 = 94.6134), donc bien 7h/jour — ÷ 5, pas ÷ 7. Reste, comme ÷ 7,
 // différent de la base mensuelle ÷ 30 (151.67 ÷ 30 × 14 aurait donné 70.78h, pas 70.00h).
 // Heures sup/nuit/jour OFF restent calculées sur les heures réelles dans les deux modes : ce sont
-// des suppléments variables, pas la base.
+// des suppléments variables, pas la base — À UNE EXCEPTION PRÈS, voir baseShortfallHours ci-dessous.
 export function computeMonthPayroll(month, hourlyRate, rates = DEFAULT_RATES, options = {}) {
   const total = month.total
   const offWorkedHours = total.offWorked
   const payMode = options.payMode === 'monthly' ? 'monthly' : 'hourly'
   const absenceDays = Number(options.absenceDays) || 0
 
+  // Si les heures réellement travaillées ce mois (total.baseHours, le forfait jour-par-jour de
+  // monthlyDetail.js) tombent sous le seuil mensuel de référence (151.67h pour 35h/semaine — la
+  // même valeur que fullBaseHours en mode "Mensualisé"), une partie du pool d'heures sup sert
+  // d'abord à combler ce manque plutôt que d'être payée en plus, au tarif normal et non majoré —
+  // précisé par l'utilisateur, et vérifié contre un vrai bulletin : le pool sup recalculé jour par
+  // jour ici (48.00h pour juillet 2026) dépassait celui affiché sur le bulletin (38.83h) d'exactement
+  // le manque à 151.67h ce mois-là (151.67 - 142.50 = 9.17h = 48.00 - 38.83). Le montant de ces
+  // heures n'est perdu dans aucun des deux modes : en mensualisé la base était déjà fixée à 151.67h
+  // quoi qu'il arrive (seul le pool sup affiché doit baisser d'autant, sinon le simulateur listerait
+  // des heures sup qui ne sont en réalité jamais payées en plus) ; en heures réelles, baseHours
+  // ci-dessous est complété par ces mêmes heures pour que leur argent reste bien compté quelque part.
+  const monthlyBaseHours = Math.round(rates.weeklyBaseHours * 52 / 12 * 100) / 100
+  const baseShortfallHours = Math.max(0, monthlyBaseHours - total.baseHours)
+  const overtimeUsedForShortfall = Math.min(baseShortfallHours, total.overtime)
+
   let baseHours, baseAmount, fullBaseHours, fullBaseAmount, absenceHours, absenceAmount
   if (payMode === 'monthly') {
-    fullBaseHours = Math.round(rates.weeklyBaseHours * 52 / 12 * 100) / 100
+    fullBaseHours = monthlyBaseHours
     fullBaseAmount = fullBaseHours * hourlyRate
     absenceHours = (rates.weeklyBaseHours / 5) * absenceDays
     absenceAmount = absenceHours * hourlyRate
@@ -65,14 +80,16 @@ export function computeMonthPayroll(month, hourlyRate, rates = DEFAULT_RATES, op
   } else {
     // total.baseHours est un forfait de 7h30/jour travaillé, pas les heures réelles moins la part
     // sup (voir monthlyDetail.js) — un jour OFF travaillé n'y compte pas du tout, ses heures sont
-    // entièrement dans sa propre prime à part ci-dessous.
-    baseHours = total.baseHours
+    // entièrement dans sa propre prime à part ci-dessous. + overtimeUsedForShortfall : voir le
+    // commentaire au-dessus de cette fonction.
+    baseHours = total.baseHours + overtimeUsedForShortfall
     baseAmount = baseHours * hourlyRate
   }
 
-  // Pool tiéré : heures sup normales SEULEMENT — les heures d'un jour OFF travaillé n'y comptent
-  // plus (voir le commentaire au-dessus de cette fonction).
-  const overtimePoolHours = total.overtime
+  // Pool tiéré : heures sup normales SEULEMENT (les heures d'un jour OFF travaillé n'y comptent pas,
+  // voir le commentaire au-dessus de cette fonction), moins la part utilisée pour compléter le seuil
+  // mensuel ci-dessus.
+  const overtimePoolHours = total.overtime - overtimeUsedForShortfall
   const overtimeLowHours = Math.min(overtimePoolHours, rates.overtimeThresholdHours)
   const overtimeHighHours = Math.max(0, overtimePoolHours - rates.overtimeThresholdHours)
   const overtimeLowAmount = overtimeLowHours * hourlyRate * rates.overtimeMultiplierLow
@@ -96,6 +113,7 @@ export function computeMonthPayroll(month, hourlyRate, rates = DEFAULT_RATES, op
     payMode,
     baseHours, baseAmount,
     fullBaseHours, fullBaseAmount, absenceDays, absenceHours, absenceAmount,
+    monthlyBaseHours, baseShortfallHours, overtimeUsedForShortfall,
     offWorkedHours, offWorkedAmount,
     overtimeThresholdHours: rates.overtimeThresholdHours,
     overtimeLowHours, overtimeHighHours, overtimeLowAmount, overtimeHighAmount,
@@ -139,6 +157,25 @@ export function payrollRows(p) {
     }
   } else {
     rows.push({ label: 'Heures normales', hours: p.baseHours, amount: p.baseAmount })
+  }
+  // Informative uniquement : ces heures sont déjà comptées dans baseHours/baseAmount ci-dessus (mode
+  // heures réelles) ou n'affectent pas fullBaseAmount, déjà fixe (mode mensualisé) — mais PAS dans
+  // overtimeLowHours/overtimeHighHours plus bas, contrairement aux deux lignes "Dont..." suivantes :
+  // ce sont au contraire des heures qui auraient dû y être sans le manque à combler (voir
+  // computeMonthPayroll()). Précisé pour la même raison que les "Dont..." ci-dessous : sans ce
+  // libellé, un lecteur comparant au pool sup recalculé à la main pourrait croire à des heures sup
+  // oubliées plutôt qu'à des heures déjà payées au tarif normal via la base.
+  if (p.overtimeUsedForShortfall > 0) {
+    rows.push({
+      // Libellé volontairement court (voir le commentaire ASCII-only plus bas dans ce fichier pour
+      // la même contrainte de largeur en PDF, colonne Catégorie à 88mm) : une première version plus
+      // explicite ("... complétant le seuil mensuel de 151h40 (payées à taux normal, pas en plus)")
+      // mesurait ~155mm avec jsPDF.getTextWidth(), largement au-delà de la colonne — déjà un souci
+      // préexistant sur d'autres lignes "Dont..." de ce fichier (~115mm pour 88mm de large, aucun
+      // retour à la ligne géré par exportPayroll.js), mais pas de raison de l'aggraver davantage ici.
+      label: `Dont ${fmtHours(p.overtimeUsedForShortfall)} de sup utilisées pour compléter le seuil mensuel (taux normal)`,
+      hours: p.overtimeUsedForShortfall, amount: null
+    })
   }
   // Informative uniquement : ce sous-total est déjà compris dans overtimeLowHours/overtimeHighHours
   // ci-dessous (voir monthlyDetail.js), donc pas de montant propre — l'ajouter en aurait doublé le
