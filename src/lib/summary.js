@@ -28,5 +28,9 @@ export function summary(missions, shifts, period, refDate = new Date()) {
   const overtime = ss.reduce((a, s) => a + (s.is_day_off ? 0 : Number(s.overtime_hours || 0)), 0)
   const offWorked = ss.reduce((a, s) => a + (s.is_day_off ? Number(s.overtime_hours || 0) : 0), 0)
   const night = ss.reduce((a, s) => a + Number(s.night_hours || 0), 0)
-  return { tips, hours, overtime, offWorked, night, missionCount: ms.length, shiftCount: ss.length }
+  // missionCount exclut les pourboires rapides (tip_only, ajoutés depuis Calendar.jsx sans mission
+  // complète) : ce ne sont pas des interventions traitées, seul leur montant compte dans `tips`
+  // ci-dessus — sinon la tuile "Missions" de Home.jsx se met à compter des notes de pourboire.
+  const missionCount = ms.filter(m => !m.tip_only).length
+  return { tips, hours, overtime, offWorked, night, missionCount, shiftCount: ss.length }
 }

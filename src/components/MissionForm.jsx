@@ -2,6 +2,7 @@ import { todayLocal } from '../lib/date'
 import { useState } from 'react'
 import { useMissions } from '../store/missions'
 import { formatMissionReport } from '../lib/formatReport'
+import { parseAmount } from '../lib/format'
 
 const EMPTY = {
   intervention_date: todayLocal(),
@@ -43,7 +44,7 @@ export default function MissionForm({ initial, onClose }) {
       bags_oversized: Number(f.bags_oversized) || 0,
       animal_crates: Number(f.animal_crates) || 0,
       porter_count: Number(f.porter_count) || 1,
-      tip_amount: Number(String(f.tip_amount).replace(',', '.')) || 0
+      tip_amount: parseAmount(f.tip_amount)
     }
     try {
       if (initial?.id) await update({ ...initial, ...payload })

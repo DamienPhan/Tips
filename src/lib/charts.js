@@ -11,6 +11,9 @@ function isoWeek(dateStr) {
 }
 
 // Histogramme adaptatif : semaine->jours, mois->semaines, année->mois.
+// `count` exclut les pourboires rapides (tip_only, voir Calendar.jsx) : ce ne sont pas des missions
+// traitées, seul leur montant doit gonfler `tips` — sinon le tap-detail "X missions" sous le
+// graphe (Home.jsx) compte des notes de pourboire comme des interventions.
 export function revenueBars(missions, period) {
   const map = new Map()
   for (const m of missions) {
@@ -21,16 +24,21 @@ export function revenueBars(missions, period) {
     if (!map.has(key)) map.set(key, { tips: 0, count: 0 })
     const b = map.get(key)
     b.tips += Number(m.tip_amount || 0)
-    b.count += 1
+    if (!m.tip_only) b.count += 1
   }
   return [...map.entries()]
     .sort((a, b) => (a[0] < b[0] ? -1 : 1))
     .map(([key, { tips, count }]) => ({ key, tips, count }))
 }
 
+// "Jour travaillé" (Home.jsx) : un pourboire rapide seul (tip_only, sans mission complète ni shift)
+// ne suffit pas à prouver qu'un jour a été travaillé, donc n'entre pas dans ce calcul de moyenne —
+// contrairement à `revenueBars` ci-dessus, où son montant doit quand même apparaître dans le total
+// de la période (Gains totaux reste sur `summary.js`, indépendant de cette fonction).
 export function dailyAverage(missions) {
   const byDay = new Map()
   for (const m of missions) {
+    if (m.tip_only) continue
     const k = m.intervention_date
     byDay.set(k, (byDay.get(k) || 0) + Number(m.tip_amount || 0))
   }

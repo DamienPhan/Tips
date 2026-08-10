@@ -25,6 +25,11 @@ create table if not exists missions (
   porter_count int default 1,
   satisfaction text check (satisfaction in ('EXCELLENTE','BONNE','MOYENNE','MAUVAISE')),
   tip_amount numeric(6,2) default 0,
+  -- Pourboire ajouté depuis le Calendrier sans mission complète (voir Calendar.jsx) : distingue une
+  -- vraie intervention d'une simple note de pourboire, pour que missionCount/dailyAverage/le
+  -- "X missions" du graphe Accueil (summary.js, charts.js) ne comptent pas ces lignes comme des
+  -- missions traitées — seul leur tip_amount doit remonter dans les totaux de gains.
+  tip_only boolean default false,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -104,3 +109,7 @@ create policy owner_all_shifts on work_shifts
 -- l'affichage après un aller-retour serveur. Passage à numeric(5,2), comme night_hours.
 -- alter table work_shifts alter column hours type numeric(5,2);
 -- alter table work_shifts alter column overtime_hours type numeric(5,2);
+-- tip_only (missions, voir plus haut) : ajoutée le 2026-08-10, même run manuel requis sur un projet
+-- Supabase existant, sinon la synchro du pourboire rapide échoue avec la même erreur "Could not
+-- find the 'tip_only' column" (visible dans SyncDetails.jsx) :
+-- alter table missions add column if not exists tip_only boolean default false;
