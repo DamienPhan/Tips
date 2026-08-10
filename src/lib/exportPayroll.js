@@ -244,11 +244,16 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate, options = {})
 
     if (hoursOnly) return // pas de récapitulatif de paie dans ce mode
 
-    // Le récapitulatif de paie a besoin d'environ 110mm (titre + en-tête + jusqu'à 4 lignes de
-    // catégorie + note OFF éventuelle + TOTAL BRUT + cotisations + NET + disclaimer) : on repart
-    // sur une nouvelle page plutôt que de le faire chevaucher le bas de la page si le relevé
-    // d'heures l'a rempli.
-    if (y + 110 > 290) {
+    // Le récapitulatif de paie a besoin de : titre (8mm) + en-tête (rowH) + une ligne par catégorie
+    // retournée par payrollRows() (rowH chacune) + TOTAL BRUT et NET (rowH+1 chacune, plus hauts que
+    // les autres lignes) + cotisations (rowH) + marge pour le disclaimer (10mm). Calculé dynamiquement
+    // à partir de rows.length plutôt qu'un nombre de lignes figé en dur : une estimation fixe à "jusqu'à
+    // 4 lignes de catégorie" (110mm) a fini par sous-estimer l'espace réel une fois payrollRows() étendu
+    // jusqu'à 8-9 lignes possibles (les lignes informatives "Dont..." — comblement du seuil mensuel,
+    // report du mois dernier — s'ajoutent désormais aux lignes de base/sup/OFF/nuit), ce qui aurait pu
+    // faire chevaucher le tableau avec le bas de la page pour un mois cumulant plusieurs de ces lignes.
+    const recapHeight = 8 + rowH + rows.length * rowH + (rowH + 1) + rowH + (rowH + 1) + 10
+    if (y + recapHeight > 290) {
       doc.addPage()
       y = 20
     }
