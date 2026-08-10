@@ -21,6 +21,7 @@ export default function Calendar() {
   const shifts = useMissions(s => s.shifts)
   const missions = useMissions(s => s.missions)
   const addMission = useMissions(s => s.add)
+  const updateMission = useMissions(s => s.update)
   const updateShift = useMissions(s => s.updateShift)
   const addShifts = useMissions(s => s.addShifts)
   const removeShift = useMissions(s => s.removeShift)
@@ -50,6 +51,14 @@ export default function Calendar() {
     if (m.tip_only) continue
     missionCountMap.set(m.intervention_date, (missionCountMap.get(m.intervention_date) || 0) + 1)
   }
+  // Pourboire rapide déjà existant pour un jour donné (une seule ligne attendue par jour depuis ce
+  // panneau) : permet à saveTip() de le modifier en place plutôt que d'en créer un nouveau à chaque
+  // fois que "+ Ajouter un pourboire" est rouvert — sans ça, corriger un montant saisi par erreur
+  // n'était pas possible depuis le Calendrier, seul un nouvel ajout s'empilant sur le total du jour.
+  const tipOnlyMap = new Map()
+  for (const m of missions) {
+    if (m.tip_only && !tipOnlyMap.has(m.intervention_date)) tipOnlyMap.set(m.intervention_date, m)
+  }
   const maxTip = Math.max(...[...tipMap.values()], 1)
 
   const first = new Date(year, month, 1)
@@ -68,6 +77,7 @@ export default function Calendar() {
   const selShift = selDate ? shiftMap.get(selDate) : null
   const selTips = selDate ? (tipMap.get(selDate) || 0) : 0
   const selCount = selDate ? (missionCountMap.get(selDate) || 0) : 0
+  const selTipOnly = selDate ? tipOnlyMap.get(selDate) : null
 
   const openEdit = () => {
     if (selShift) {
@@ -107,10 +117,18 @@ export default function Calendar() {
   // "jour travaillé", "X missions" du graphe) — seul son tip_amount doit compter dans les totaux de
   // gains, pas comme une intervention traitée. `tipBusy` évite un double-tap sur OK d'envoyer deux
   // fois la même saisie avant que le premier ajout (async) n'ait fini.
+  // Si un pourboire rapide existe déjà ce jour (selTipOnly), on modifie cette ligne en place plutôt
+  // que d'en créer une nouvelle — sinon rouvrir "+ Ajouter un pourboire" pour corriger une erreur de
+  // saisie empilait un second montant sur le total du jour au lieu de le remplacer. En édition, on
+  // enregistre même une saisie à 0 (l'utilisateur corrige explicitement une ligne existante) ; en
+  // création, un montant à 0/vide reste ignoré pour ne pas créer de ligne vide.
   const saveTip = async () => {
     if (tipBusy) return
     const v = parseAmount(tipDraft)
-    if (v > 0) {
+    if (selTipOnly) {
+      setTipBusy(true)
+      try { await updateMission({ ...selTipOnly, tip_amount: v }) } finally { setTipBusy(false) }
+    } else if (v > 0) {
       setTipBusy(true)
       try { await addMission({ intervention_date: selDate, tip_amount: v, tip_only: true }) } finally { setTipBusy(false) }
     }
@@ -204,7 +222,10 @@ export default function Calendar() {
 
           {/* Tips du jour toujours visibles, et modifiables ici indépendamment d'un shift : "+
               Ajouter un pourboire" crée une mission minimale (voir saveTip ci-dessus) sans passer
-              par le formulaire complet ni exiger un shift pour ce jour. */}
+              par le formulaire complet ni exiger un shift pour ce jour. Si un pourboire rapide existe
+              déjà (selTipOnly), le bouton bascule sur "Modifier le pourboire" et pré-remplit le
+              montant courant — sinon rouvrir ce panneau ne permettait que d'empiler un nouveau
+              montant, jamais de corriger celui déjà saisi. */}
           {!editing && (
             <div className="bg-night rounded-xl px-4 py-3 mb-3">
               <div className="flex items-baseline justify-between">
@@ -228,9 +249,13 @@ export default function Calendar() {
                   <button onClick={() => { setAddingTip(false); setTipDraft('') }} disabled={tipBusy} className="px-3 rounded-lg bg-surface-2 text-muted text-sm shrink-0 disabled:opacity-50">Annuler</button>
                 </div>
               ) : (
-                <button onClick={() => { setTipDraft(''); setAddingTip(true) }}
+                <button
+                  onClick={() => {
+                    setTipDraft(selTipOnly ? String(selTipOnly.tip_amount).replace('.', ',') : '')
+                    setAddingTip(true)
+                  }}
                   className="w-full mt-2.5 py-2 rounded-lg text-xs text-amber border border-amber/30 active:bg-amber/10">
-                  + Ajouter un pourboire
+                  {selTipOnly ? 'Modifier le pourboire' : '+ Ajouter un pourboire'}
                 </button>
               )}
             </div>
