@@ -3,12 +3,19 @@ import { fmtHours } from './parseShift'
 
 export const DEFAULT_RATES = {
   // Seuil du palier +25% : les heures sup du pool mensuel (voir monthlyDetail.js) sont majorées à
-  // +25% jusqu'à la 33e heure comprise, puis +50% à partir de la 34e — valeur donnée directement par
-  // l'utilisateur (pas une conversion depuis la règle légale hebdomadaire générique de 35h/8h/44h,
-  // essayée puis abandonnée : la convention réelle de l'employeur diffère du barème légal par
-  // défaut). Le pool reste agrégé au mois entier, pas semaine civile par semaine civile (voir la
+  // +25% jusqu'à 34.86h comprises, puis +50% au-delà. Deuxième révision de cette valeur : d'abord
+  // une conversion légale hebdomadaire (35h/8h/44h, ≈34.67h), essayée puis abandonnée sur la base
+  // d'une clarification de l'utilisateur disant que l'employeur utilisait un seuil fixe de 33h —
+  // cette clarification s'est révélée imprécise une fois confrontée à un vrai bulletin de juillet
+  // 2026 : après application du comblement du seuil mensuel (voir baseShortfallHours plus bas dans
+  // ce fichier), le pool sup réel de ce mois-là (38.83h) s'y répartissait en 34.86h à 25% et 3.97h à
+  // 50% — pas 33h/5.83h. Recopié tel quel (pas re-dérivé d'une formule légale, qui donnerait 34.67h
+  // et ne matchait pas exactement non plus) : demande explicite de l'utilisateur après lui avoir
+  // signalé que ni l'ancien 33h ni la formule légale ne collaient parfaitement. Comme les deux
+  // valeurs précédentes, celle-ci peut se révéler à son tour imprécise sur un futur bulletin — le
+  // pool reste de toute façon agrégé au mois entier, pas semaine civile par semaine civile (voir la
   // note sur la coupure du 25 dans monthlyDetail.js).
-  overtimeThresholdHours: 33,
+  overtimeThresholdHours: 34.86,
   overtimeMultiplierLow: 1.25, // heures sup jusqu'au seuil — aussi le taux des heures de jour OFF travaillé (voir plus bas)
   overtimeMultiplierHigh: 1.5, // heures sup au-delà du seuil
   nightBonusRate: 0.25,        // prime de nuit, en supplément du taux de base
