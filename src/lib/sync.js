@@ -7,7 +7,7 @@ const COLUMNS = [
   'booking_mode', 'service_type', 'flight_code', 'terminal', 'pax_count',
   'bags_standard', 'bags_oversized', 'animal_crates', 'tax_refund',
   'meeting_point', 'drop_point', 'has_issue', 'issue_description',
-  'is_no_show', 'porter_count', 'satisfaction', 'tip_amount',
+  'is_no_show', 'porter_count', 'satisfaction', 'tip_amount', 'tip_only',
   'created_at', 'updated_at'
 ]
 

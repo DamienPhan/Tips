@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMissions } from '../store/missions'
 import { fmtHours, fmtMinutes, recompute, workedMin, overtimePayMin, nightBreakdown, isRestDay } from '../lib/parseShift'
 import { parseLocal } from '../lib/date'
-import { eur, MONTHS } from '../lib/format'
+import { eur, MONTHS, parseAmount } from '../lib/format'
 
 const DOW = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
 
@@ -20,6 +20,7 @@ function parseTime(str) {
 export default function Calendar() {
   const shifts = useMissions(s => s.shifts)
   const missions = useMissions(s => s.missions)
+  const addMission = useMissions(s => s.add)
   const updateShift = useMissions(s => s.updateShift)
   const addShifts = useMissions(s => s.addShifts)
   const removeShift = useMissions(s => s.removeShift)
@@ -32,15 +33,21 @@ export default function Calendar() {
   const [endStr, setEndStr] = useState('')
   const [editOff, setEditOff] = useState(false)
   const [err, setErr] = useState('')
+  const [addingTip, setAddingTip] = useState(false)
+  const [tipDraft, setTipDraft] = useState('')
+  const [tipBusy, setTipBusy] = useState(false)
 
   const shiftMap = new Map(shifts.map(s => [s.shift_date, s]))
-  // tips par jour
+  // tips par jour — inclut les pourboires rapides (tip_only) : c'est de l'argent réellement perçu.
   const tipMap = new Map()
   for (const m of missions) {
     tipMap.set(m.intervention_date, (tipMap.get(m.intervention_date) || 0) + Number(m.tip_amount || 0))
   }
+  // Compte de missions "réelles" affiché sous le total du jour — exclut les pourboires rapides
+  // (tip_only), qui ne représentent pas une intervention traitée (même logique que summary.js).
   const missionCountMap = new Map()
   for (const m of missions) {
+    if (m.tip_only) continue
     missionCountMap.set(m.intervention_date, (missionCountMap.get(m.intervention_date) || 0) + 1)
   }
   const maxTip = Math.max(...[...tipMap.values()], 1)
@@ -55,7 +62,7 @@ export default function Calendar() {
   const prevMonth = () => { if (month === 0) { setMonth(11); setYear(year - 1) } else setMonth(month - 1); closeDetail() }
   const nextMonth = () => { if (month === 11) { setMonth(0); setYear(year + 1) } else setMonth(month + 1); closeDetail() }
   const goToday = () => { setYear(now.getFullYear()); setMonth(now.getMonth()); closeDetail() }
-  const closeDetail = () => { setSelected(null); setEditing(false); setErr('') }
+  const closeDetail = () => { setSelected(null); setEditing(false); setErr(''); setAddingTip(false) }
 
   const selDate = selected ? ymd(year, month, selected) : null
   const selShift = selDate ? shiftMap.get(selDate) : null
@@ -67,6 +74,11 @@ export default function Calendar() {
       setStartStr(fmtMinutes(selShift.start_min)); setEndStr(fmtMinutes(selShift.end_min)); setEditOff(!!selShift.is_day_off)
     } else { setStartStr(''); setEndStr(''); setEditOff(false) }
     setErr(''); setEditing(true)
+    // Le formulaire d'horaires et celui de pourboire rapide partagent le même panneau ; fermer l'un
+    // en ouvrant l'autre évite qu'un brouillon de pourboire resurgisse, périmé, quand on revient sur
+    // ce panneau après avoir annulé l'édition du shift (le bloc Pourboires est démonté tant que
+    // `editing` est vrai, mais `addingTip` n'était sinon jamais remis à zéro par ce chemin).
+    setAddingTip(false); setTipDraft('')
   }
 
   const saveEdit = async () => {
@@ -85,6 +97,24 @@ export default function Calendar() {
     const rec = recompute({ start_min: 0, end_min: 0 }, true)
     if (selShift) await updateShift({ ...selShift, start_min: 0, end_min: 0, ...rec })
     else await addShifts([{ shift_date: selDate, start_min: 0, end_min: 0, ...rec }])
+  }
+
+  // Pourboire rapide indépendant du shift du jour : crée une mission minimale (juste la date + le
+  // montant, tous les autres champs restant à leur défaut/NULL côté Postgres — le schéma n'exige que
+  // intervention_date en NOT NULL) plutôt que d'obliger à passer par le formulaire complet de mission
+  // ou par l'ajout d'un shift, pour pouvoir noter un pourboire du jour même sans horaires saisis.
+  // `tip_only: true` distingue cette ligne d'une vraie mission pour summary.js/charts.js (missionCount,
+  // "jour travaillé", "X missions" du graphe) — seul son tip_amount doit compter dans les totaux de
+  // gains, pas comme une intervention traitée. `tipBusy` évite un double-tap sur OK d'envoyer deux
+  // fois la même saisie avant que le premier ajout (async) n'ait fini.
+  const saveTip = async () => {
+    if (tipBusy) return
+    const v = parseAmount(tipDraft)
+    if (v > 0) {
+      setTipBusy(true)
+      try { await addMission({ intervention_date: selDate, tip_amount: v, tip_only: true }) } finally { setTipBusy(false) }
+    }
+    setAddingTip(false); setTipDraft('')
   }
 
   let preview = null
@@ -128,7 +158,7 @@ export default function Calendar() {
           const bg = isSel ? '#E8B14C' : tips > 0 ? `rgba(232,177,76,${intensity})` : shift ? '#1F2633' : 'transparent'
           const textColor = isSel ? '#0B0E14' : '#E6E9EF'
           return (
-            <button key={i} onClick={() => { setSelected(isSel ? null : d); setEditing(false); setErr('') }}
+            <button key={i} onClick={() => { setSelected(isSel ? null : d); setEditing(false); setErr(''); setAddingTip(false) }}
               className={`aspect-[3/4] rounded-xl flex flex-col items-center pt-1.5 px-0.5 relative ${isToday && !isSel ? 'ring-1 ring-amber/50' : ''}`}
               style={{ background: bg }}>
               {shift?.is_day_off && (
@@ -172,15 +202,37 @@ export default function Calendar() {
             {!editing && <button onClick={openEdit} className="text-amber text-sm">{selShift ? 'Modifier' : 'Ajouter shift'}</button>}
           </div>
 
-          {/* Tips du jour toujours visibles */}
+          {/* Tips du jour toujours visibles, et modifiables ici indépendamment d'un shift : "+
+              Ajouter un pourboire" crée une mission minimale (voir saveTip ci-dessus) sans passer
+              par le formulaire complet ni exiger un shift pour ce jour. */}
           {!editing && (
-            <div className="bg-night rounded-xl px-4 py-3 mb-3 flex items-baseline justify-between">
-              <span className="text-muted text-sm">Pourboires</span>
-              <div className="text-right">
-                <span className="tnum font-display font-bold text-amber text-2xl">{eur(selTips)}</span>
-                <span className="text-amber/50"> €</span>
-                {selCount > 0 && <p className="text-muted text-xs mt-0.5">{selCount} mission{selCount > 1 ? 's' : ''}</p>}
+            <div className="bg-night rounded-xl px-4 py-3 mb-3">
+              <div className="flex items-baseline justify-between">
+                <span className="text-muted text-sm">Pourboires</span>
+                <div className="text-right">
+                  <span className="tnum font-display font-bold text-amber text-2xl">{eur(selTips)}</span>
+                  <span className="text-amber/50"> €</span>
+                </div>
               </div>
+              {selCount > 0 && <p className="text-muted text-xs mt-0.5 text-right">{selCount} mission{selCount > 1 ? 's' : ''}</p>}
+              {addingTip ? (
+                <div className="flex gap-2 mt-2.5">
+                  <input
+                    inputMode="decimal" type="text" autoFocus value={tipDraft}
+                    onChange={e => setTipDraft(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && saveTip()}
+                    placeholder="0,00"
+                    className="flex-1 min-w-0 bg-surface-2 rounded-lg px-3 py-2 text-right tnum outline-none focus:ring-2 focus:ring-amber/40"
+                  />
+                  <button onClick={saveTip} disabled={tipBusy} className="px-4 rounded-lg bg-amber text-night text-sm font-medium shrink-0 disabled:opacity-50">OK</button>
+                  <button onClick={() => { setAddingTip(false); setTipDraft('') }} disabled={tipBusy} className="px-3 rounded-lg bg-surface-2 text-muted text-sm shrink-0 disabled:opacity-50">Annuler</button>
+                </div>
+              ) : (
+                <button onClick={() => { setTipDraft(''); setAddingTip(true) }}
+                  className="w-full mt-2.5 py-2 rounded-lg text-xs text-amber border border-amber/30 active:bg-amber/10">
+                  + Ajouter un pourboire
+                </button>
+              )}
             </div>
           )}
 
