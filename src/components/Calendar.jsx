@@ -20,6 +20,7 @@ function parseTime(str) {
 export default function Calendar() {
   const shifts = useMissions(s => s.shifts)
   const missions = useMissions(s => s.missions)
+  const addMission = useMissions(s => s.add)
   const updateShift = useMissions(s => s.updateShift)
   const addShifts = useMissions(s => s.addShifts)
   const removeShift = useMissions(s => s.removeShift)
@@ -32,6 +33,8 @@ export default function Calendar() {
   const [endStr, setEndStr] = useState('')
   const [editOff, setEditOff] = useState(false)
   const [err, setErr] = useState('')
+  const [addingTip, setAddingTip] = useState(false)
+  const [tipDraft, setTipDraft] = useState('')
 
   const shiftMap = new Map(shifts.map(s => [s.shift_date, s]))
   // tips par jour
@@ -55,7 +58,7 @@ export default function Calendar() {
   const prevMonth = () => { if (month === 0) { setMonth(11); setYear(year - 1) } else setMonth(month - 1); closeDetail() }
   const nextMonth = () => { if (month === 11) { setMonth(0); setYear(year + 1) } else setMonth(month + 1); closeDetail() }
   const goToday = () => { setYear(now.getFullYear()); setMonth(now.getMonth()); closeDetail() }
-  const closeDetail = () => { setSelected(null); setEditing(false); setErr('') }
+  const closeDetail = () => { setSelected(null); setEditing(false); setErr(''); setAddingTip(false) }
 
   const selDate = selected ? ymd(year, month, selected) : null
   const selShift = selDate ? shiftMap.get(selDate) : null
@@ -85,6 +88,16 @@ export default function Calendar() {
     const rec = recompute({ start_min: 0, end_min: 0 }, true)
     if (selShift) await updateShift({ ...selShift, start_min: 0, end_min: 0, ...rec })
     else await addShifts([{ shift_date: selDate, start_min: 0, end_min: 0, ...rec }])
+  }
+
+  // Pourboire rapide indépendant du shift du jour : crée une mission minimale (juste la date + le
+  // montant, tous les autres champs restant à leur défaut/NULL côté Postgres — le schéma n'exige que
+  // intervention_date en NOT NULL) plutôt que d'obliger à passer par le formulaire complet de mission
+  // ou par l'ajout d'un shift, pour pouvoir noter un pourboire du jour même sans horaires saisis.
+  const saveTip = async () => {
+    const v = Number(String(tipDraft).replace(',', '.')) || 0
+    if (v > 0) await addMission({ intervention_date: selDate, tip_amount: v })
+    setAddingTip(false); setTipDraft('')
   }
 
   let preview = null
@@ -128,7 +141,7 @@ export default function Calendar() {
           const bg = isSel ? '#E8B14C' : tips > 0 ? `rgba(232,177,76,${intensity})` : shift ? '#1F2633' : 'transparent'
           const textColor = isSel ? '#0B0E14' : '#E6E9EF'
           return (
-            <button key={i} onClick={() => { setSelected(isSel ? null : d); setEditing(false); setErr('') }}
+            <button key={i} onClick={() => { setSelected(isSel ? null : d); setEditing(false); setErr(''); setAddingTip(false) }}
               className={`aspect-[3/4] rounded-xl flex flex-col items-center pt-1.5 px-0.5 relative ${isToday && !isSel ? 'ring-1 ring-amber/50' : ''}`}
               style={{ background: bg }}>
               {shift?.is_day_off && (
@@ -172,15 +185,37 @@ export default function Calendar() {
             {!editing && <button onClick={openEdit} className="text-amber text-sm">{selShift ? 'Modifier' : 'Ajouter shift'}</button>}
           </div>
 
-          {/* Tips du jour toujours visibles */}
+          {/* Tips du jour toujours visibles, et modifiables ici indépendamment d'un shift : "+
+              Ajouter un pourboire" crée une mission minimale (voir saveTip ci-dessus) sans passer
+              par le formulaire complet ni exiger un shift pour ce jour. */}
           {!editing && (
-            <div className="bg-night rounded-xl px-4 py-3 mb-3 flex items-baseline justify-between">
-              <span className="text-muted text-sm">Pourboires</span>
-              <div className="text-right">
-                <span className="tnum font-display font-bold text-amber text-2xl">{eur(selTips)}</span>
-                <span className="text-amber/50"> €</span>
-                {selCount > 0 && <p className="text-muted text-xs mt-0.5">{selCount} mission{selCount > 1 ? 's' : ''}</p>}
+            <div className="bg-night rounded-xl px-4 py-3 mb-3">
+              <div className="flex items-baseline justify-between">
+                <span className="text-muted text-sm">Pourboires</span>
+                <div className="text-right">
+                  <span className="tnum font-display font-bold text-amber text-2xl">{eur(selTips)}</span>
+                  <span className="text-amber/50"> €</span>
+                </div>
               </div>
+              {selCount > 0 && <p className="text-muted text-xs mt-0.5 text-right">{selCount} mission{selCount > 1 ? 's' : ''}</p>}
+              {addingTip ? (
+                <div className="flex gap-2 mt-2.5">
+                  <input
+                    inputMode="decimal" type="text" autoFocus value={tipDraft}
+                    onChange={e => setTipDraft(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && saveTip()}
+                    placeholder="0,00"
+                    className="flex-1 min-w-0 bg-surface-2 rounded-lg px-3 py-2 text-right tnum outline-none focus:ring-2 focus:ring-amber/40"
+                  />
+                  <button onClick={saveTip} className="px-4 rounded-lg bg-amber text-night text-sm font-medium shrink-0">OK</button>
+                  <button onClick={() => { setAddingTip(false); setTipDraft('') }} className="px-3 rounded-lg bg-surface-2 text-muted text-sm shrink-0">Annuler</button>
+                </div>
+              ) : (
+                <button onClick={() => { setTipDraft(''); setAddingTip(true) }}
+                  className="w-full mt-2.5 py-2 rounded-lg text-xs text-amber border border-amber/30 active:bg-amber/10">
+                  + Ajouter un pourboire
+                </button>
+              )}
             </div>
           )}
 
