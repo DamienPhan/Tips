@@ -232,6 +232,30 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate, options = {})
       y += 6
 
       closeDetailChunk()
+      // Le Total Sup ci-dessus reste la somme brute des lignes affichées (48h dans l'exemple qui a
+      // motivé ce correctif) — volontairement jamais recalculé depuis le récapitulatif (voir le
+      // commentaire de shiftTotalsRow() dans shiftRows.js : un total imposé depuis ailleurs risque de
+      // diverger silencieusement des lignes visibles). Mais depuis le comblement du seuil mensuel
+      // (baseShortfallHours/overtimeUsedForShortfall dans payroll.js), une partie de ce total n'est
+      // en réalité payée qu'au tarif normal, pas majoré — sans cette note, le lecteur voit deux
+      // chiffres "Sup" différents sur le même document (celui-ci, brut, et celui du Récapitulatif,
+      // net du comblement) sans explication, ce qui a été signalé comme "le mauvais nombre d'heures
+      // supplémentaires" alors qu'aucun des deux n'est faux — ils répondent juste à deux questions
+      // différentes ("combien d'heures sup physiquement travaillées" vs "combien payées en plus").
+      // N'apparaît pas en mode hoursOnly : ce mode n'affiche pas le Récapitulatif que la note
+      // référence, la mention serait un renvoi dans le vide.
+      if (!hoursOnly && p.overtimeUsedForShortfall > 0) {
+        doc.setFont(FONT, 'italic')
+        doc.setFontSize(7.5)
+        doc.setTextColor(120)
+        doc.text(
+          `Dont ${fmtHours(p.overtimeUsedForShortfall)} de Sup comptées en heures normales (seuil mensuel de ${fmtHours(p.monthlyBaseHours)}) — voir Récapitulatif de paie ci-dessous.`,
+          marginX + 4, y
+        )
+        doc.setTextColor(0)
+        doc.setFont(FONT, 'normal')
+        y += 5
+      }
       y += 12
     } else if (hoursOnly) {
       doc.setFont(FONT, 'normal')
@@ -244,15 +268,33 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate, options = {})
 
     if (hoursOnly) return // pas de récapitulatif de paie dans ce mode
 
+    // Retour à la ligne des libellés de catégorie trop longs pour les 88mm de la colonne (jsPDF
+    // n'enroule jamais le texte automatiquement) : plusieurs lignes "Dont..." dépassent largement
+    // cette largeur (ex. "Dont 9h10 de sup utilisées pour compléter le seuil mensuel..." mesure
+    // ~113mm avec doc.getTextWidth() en Helvetica 10pt) et venaient donc se superposer visuellement
+    // au texte de la colonne Heures juste à droite — repéré sur un export réel où "normal)9h10"
+    // apparaissait collé sans espace, remonté comme "mauvais nombre d'heures". `doc.splitTextToSize`
+    // doit être appelé avec la police/taille normale déjà active (10pt, la même que celle utilisée
+    // pour dessiner ces lignes plus bas) pour mesurer correctement.
+    doc.setFont(FONT, 'normal')
+    doc.setFontSize(10)
+    const catTextW = colW[0] - 6
+    const lineH = 3.8
+    const wrappedRows = rows.map(r => {
+      const lines = doc.splitTextToSize(r.label, catTextW)
+      return { ...r, lines, rowH: Math.max(rowH, lines.length * lineH + 3) }
+    })
+
     // Le récapitulatif de paie a besoin de : titre (8mm) + en-tête (rowH) + une ligne par catégorie
-    // retournée par payrollRows() (rowH chacune) + TOTAL BRUT et NET (rowH+1 chacune, plus hauts que
+    // retournée par payrollRows() (sa propre hauteur, wrappedRows[i].rowH, désormais variable selon
+    // le nombre de lignes que prend son libellé) + TOTAL BRUT et NET (rowH+1 chacune, plus hauts que
     // les autres lignes) + cotisations (rowH) + marge pour le disclaimer (10mm). Calculé dynamiquement
-    // à partir de rows.length plutôt qu'un nombre de lignes figé en dur : une estimation fixe à "jusqu'à
-    // 4 lignes de catégorie" (110mm) a fini par sous-estimer l'espace réel une fois payrollRows() étendu
-    // jusqu'à 8-9 lignes possibles (les lignes informatives "Dont..." — comblement du seuil mensuel,
-    // report du mois dernier — s'ajoutent désormais aux lignes de base/sup/OFF/nuit), ce qui aurait pu
-    // faire chevaucher le tableau avec le bas de la page pour un mois cumulant plusieurs de ces lignes.
-    const recapHeight = 8 + rowH + rows.length * rowH + (rowH + 1) + rowH + (rowH + 1) + 10
+    // plutôt qu'un nombre de lignes figé en dur : une estimation fixe à "jusqu'à 4 lignes de
+    // catégorie" (110mm) a fini par sous-estimer l'espace réel une fois payrollRows() étendu jusqu'à
+    // 8-9 lignes possibles (les lignes informatives "Dont..." s'ajoutent désormais aux lignes de
+    // base/sup/OFF/nuit), ce qui aurait pu faire chevaucher le tableau avec le bas de la page.
+    const recapRowsHeight = wrappedRows.reduce((a, r) => a + r.rowH, 0)
+    const recapHeight = 8 + rowH + recapRowsHeight + (rowH + 1) + rowH + (rowH + 1) + 10
     if (y + recapHeight > 290) {
       doc.addPage()
       y = 20
@@ -285,11 +327,15 @@ export async function exportPayrollPdf(payrollByMonth, hourlyRate, options = {})
 
     doc.setFont(FONT, 'normal')
     doc.setFontSize(10)
-    rows.forEach(r => {
-      doc.text(r.label, colX[0] + 3, y + rowH / 2 + 1.2)
-      doc.text(fmtHours(r.hours), colX[1] + colW[1] - 3, y + rowH / 2 + 1.2, { align: 'right' })
-      doc.text(eur(r.amount), colX[2] + colW[2] - 3, y + rowH / 2 + 1.2, { align: 'right' })
-      y += rowH
+    wrappedRows.forEach(r => {
+      // Bloc de lignes centré verticalement dans r.rowH — pour un libellé tenant sur une seule
+      // ligne (l'immense majorité), ceci retombe exactement sur l'ancienne formule à pas fixe
+      // (r.rowH === rowH, un seul terme), donc aucun changement visuel pour ces lignes-là.
+      const startY = y + (r.rowH - (r.lines.length - 1) * lineH) / 2 + 1.2
+      r.lines.forEach((line, i) => doc.text(line, colX[0] + 3, startY + i * lineH))
+      doc.text(fmtHours(r.hours), colX[1] + colW[1] - 3, y + r.rowH / 2 + 1.2, { align: 'right' })
+      doc.text(eur(r.amount), colX[2] + colW[2] - 3, y + r.rowH / 2 + 1.2, { align: 'right' })
+      y += r.rowH
       rowBottoms.push(y)
     })
 
