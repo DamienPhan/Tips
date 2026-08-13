@@ -31,14 +31,20 @@ export function revenueBars(missions, period) {
     .map(([key, { tips, count }]) => ({ key, tips, count }))
 }
 
-// "Jour travaillé" (Home.jsx) : un pourboire rapide seul (tip_only, sans mission complète ni shift)
-// ne suffit pas à prouver qu'un jour a été travaillé, donc n'entre pas dans ce calcul de moyenne —
-// contrairement à `revenueBars` ci-dessus, où son montant doit quand même apparaître dans le total
-// de la période (Gains totaux reste sur `summary.js`, indépendant de cette fonction).
+// "Jour travaillé" (Home.jsx) : inclut les pourboires rapides (tip_only, voir Calendar.jsx) dans le
+// calcul de moyenne — contrairement à missionCount/revenueBars' count, qui les excluent parce qu'ils
+// ne représentent pas une intervention traitée. Une tentative précédente les excluait aussi ici, sur
+// l'hypothèse qu'un pourboire seul ne prouvait pas qu'un jour avait été travaillé — regressé en
+// pratique : un utilisateur se servant de "+ Ajouter un pourboire" comme méthode principale (jamais
+// de mission complète créée) se retrouvait avec "Moyenne par jour travaillé" bloquée à 0,00 € en
+// permanence (`byDay` toujours vide), alors que le Calendrier montrait bien des jours travaillés
+// avec de vrais horaires et des gains réels ce mois-là. Un pourboire rapide reste, par définition
+// (voir Calendar.jsx), de l'argent perçu un jour où l'utilisateur affirme avoir travaillé — la bonne
+// alternative aurait été de croiser avec les shifts du jour, mais cette fonction ne reçoit que
+// `missions`, pas `shifts` (Home.jsx l'appelle avec `monthMissions` uniquement).
 export function dailyAverage(missions) {
   const byDay = new Map()
   for (const m of missions) {
-    if (m.tip_only) continue
     const k = m.intervention_date
     byDay.set(k, (byDay.get(k) || 0) + Number(m.tip_amount || 0))
   }
