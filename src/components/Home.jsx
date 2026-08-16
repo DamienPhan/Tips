@@ -71,11 +71,19 @@ export default function Home() {
   const sum = summary(missions, shifts, period, refDate)
   const bars = revenueBars(missions, period)
   const svc = serviceBreakdown(missions)
-  const monthMissions = useMemo(() => missions.filter(m => {
+  // Portée de "Moyenne par jour travaillé" : le mois calendaire de refDate sur les onglets
+  // Semaine/Mois (refDate y avance jour par jour ou mois par mois, donc son mois suit naturellement
+  // la navigation) — mais l'année entière sur l'onglet Année, où shiftRefDate() ne change que
+  // refDate.getFullYear() et jamais son mois (voir plus haut) : sans ce cas particulier, la moyenne
+  // restait bloquée sur "le mois actuel" (ex. Août) quelle que soit l'année parcourue, y compris une
+  // année passée sans aucune donnée en août — signalé par l'utilisateur ("si je change le mois, la
+  // moyenne doit changer en conséquence").
+  const avgMissions = useMemo(() => missions.filter(m => {
     const d = parseLocal(m.intervention_date)
+    if (period === 'year') return d.getFullYear() === refDate.getFullYear()
     return d.getFullYear() === refDate.getFullYear() && d.getMonth() === refDate.getMonth()
-  }), [missions, refDate])
-  const avg = dailyAverage(monthMissions)
+  }), [missions, refDate, period])
+  const avg = dailyAverage(avgMissions)
   const [whole, cents] = eur(sum.tips).split(',')
   const canGoNext = periodKey(period, refDate) !== periodKey(period, new Date())
 
@@ -150,7 +158,9 @@ export default function Home() {
       <section className="bg-surface rounded-2xl p-4 mb-4">
         <div className="flex items-baseline justify-between mb-1">
           <h3 className="font-medium text-sm">Moyenne par jour travaillé</h3>
-          <span className="text-muted text-xs">{MONTHS[refDate.getMonth()]} {refDate.getFullYear()}</span>
+          <span className="text-muted text-xs">
+            {period === 'year' ? refDate.getFullYear() : `${MONTHS[refDate.getMonth()]} ${refDate.getFullYear()}`}
+          </span>
         </div>
         <div className="flex items-baseline gap-1 mb-2">
           <Amt revealed={revealed} onToggle={toggleRevealed} blur={8} className="tnum font-display font-bold text-amber text-3xl">{eur(avg.avg)}</Amt>
