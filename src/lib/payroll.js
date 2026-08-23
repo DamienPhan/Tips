@@ -121,6 +121,18 @@ export function computeMonthPayroll(month, hourlyRate, rates = DEFAULT_RATES, op
   const cotisationAmount = grossTotal * cotisationRate
   const netTotal = grossTotal - cotisationAmount
 
+  // `total.overtimeCarriedIn` (monthlyDetail.js) est un sous-total du pool AVANT comblement du seuil
+  // mensuel (overtimeUsedForShortfall ci-dessus) — sans plafonnement, la ligne informative "Dont
+  // heures sup. du mois dernier (déjà incluses ci-dessous)" pouvait afficher plus d'heures que le
+  // pool tiéré réellement montré en dessous n'en contient (ex. 5h30 "déjà incluses" alors que
+  // Heures sup jusqu'à/au-delà du seuil affichent toutes les deux 0h, le pool ayant été entièrement
+  // absorbé par le comblement) — repéré par l'utilisateur sur un export réel comme "pas corrigé".
+  // Plafonner à overtimePoolHours (ce qui reste réellement affiché dans le pool tiéré) élimine cette
+  // contradiction : si le comblement a tout absorbé, la ligne affiche 0 et ne s'affiche plus du tout
+  // (payrollRows() la masque déjà quand sa valeur est 0), plutôt que de prétendre à un report qui n'a
+  // plus de contrepartie visible.
+  const overtimeCarriedInHours = Math.min(total.overtimeCarriedIn, overtimePoolHours)
+
   return {
     payMode,
     baseHours, baseAmount,
@@ -129,7 +141,7 @@ export function computeMonthPayroll(month, hourlyRate, rates = DEFAULT_RATES, op
     offWorkedHours, offWorkedAmount,
     overtimeThresholdHours: rates.overtimeThresholdHours,
     overtimeLowHours, overtimeHighHours, overtimeLowAmount, overtimeHighAmount,
-    overtimeCarriedInHours: total.overtimeCarriedIn,
+    overtimeCarriedInHours,
     offWorkedCarriedInHours: total.offWorkedCarriedIn,
     nightHours: total.night, nightBonus,
     grossTotal,
