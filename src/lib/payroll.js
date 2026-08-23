@@ -1,5 +1,6 @@
 import { monthlyDetail } from './monthlyDetail'
 import { fmtHours } from './parseShift'
+import { todayLocal } from './date'
 
 export const DEFAULT_RATES = {
   // Seuil du palier +25% : les heures sup du pool mensuel (voir monthlyDetail.js) sont majorées à
@@ -77,8 +78,23 @@ export function computeMonthPayroll(month, hourlyRate, rates = DEFAULT_RATES, op
   // quoi qu'il arrive (seul le pool sup affiché doit baisser d'autant, sinon le simulateur listerait
   // des heures sup qui ne sont en réalité jamais payées en plus) ; en heures réelles, baseHours
   // ci-dessous est complété par ces mêmes heures pour que leur argent reste bien compté quelque part.
+  //
+  // Ce comblement ne peut s'appliquer qu'à un mois CALENDAIRE déjà terminé — total.baseHours ne
+  // cesse de grossir au fil du mois en cours (chaque nouveau shift saisi l'augmente), donc le
+  // comparer au seuil plein (151.67h) avant la fin du mois fabrique un "manque" qui ne reflète que
+  // les jours pas encore écoulés, pas un vrai déficit d'heures. Bug réel trouvé en review : pour le
+  // mois en cours (ex. le 23 août, mois de paie par défaut du simulateur, voir monthKey dans
+  // PayrollSimulator.jsx), avec ~120h de total.baseHours déjà saisies sur ~151.67h attendues en fin
+  // de mois, tout le pool sup du mois (31h, pourtant de vraies heures sup déjà travaillées) se
+  // faisait absorber par ce "manque" — la simulation affichait alors 0h d'heures sup réellement
+  // majorées pour un mois pas fini, avant même que l'utilisateur ait eu la chance de finir de le
+  // remplir. `month.key` (mois de paie, voir monthlyDetail.js) est comparé au mois civil actuel :
+  // strictement inférieur = mois entièrement passé, comblement autorisé ; égal (le mois en cours) ou
+  // supérieur (ne devrait pas arriver) = comblement désactivé, tout le pool sup reste dans le calcul
+  // normal jusqu'à/au-delà du seuil.
+  const monthIsComplete = month.key < todayLocal().slice(0, 7)
   const monthlyBaseHours = Math.round(rates.weeklyBaseHours * 52 / 12 * 100) / 100
-  const baseShortfallHours = Math.max(0, monthlyBaseHours - total.baseHours)
+  const baseShortfallHours = monthIsComplete ? Math.max(0, monthlyBaseHours - total.baseHours) : 0
   const overtimeUsedForShortfall = Math.min(baseShortfallHours, total.overtime)
 
   let baseHours, baseAmount, fullBaseHours, fullBaseAmount, absenceHours, absenceAmount
