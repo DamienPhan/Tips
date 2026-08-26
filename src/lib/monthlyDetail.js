@@ -9,7 +9,12 @@ const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet'
 // les heures normales (mois calendaire réel, jamais reportées) suite à une vérification contre un
 // bulletin qui ne semblait pas les reporter — corrigé après qu'un autre bulletin réel a montré que
 // la prime de nuit du 26-fin de mois est bien reportée exactement comme les heures sup.
-function payrollCutoffMonthKey(dateStr) {
+// Exportée pour PayrollSimulator.jsx's copyHours() : filtrer shifts.filter(s =>
+// payrollCutoffMonthKey(s.shift_date) === monthKey) donne exactement l'intervalle "26 du mois
+// précédent au 25 de ce mois-ci" pour un mois de paie donné — plus fiable que de réutiliser
+// carriedInRows/cutoffRows (qui filtrent aussi sur la présence de majoration, une notion sans
+// rapport avec "quelles dates appartiennent à cette période de paie").
+export function payrollCutoffMonthKey(dateStr) {
   const [y, mo, d] = dateStr.split('-').map(Number)
   if (d <= 25) return `${y}-${String(mo).padStart(2, '0')}`
   const ny = mo === 12 ? y + 1 : y

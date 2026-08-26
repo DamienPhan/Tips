@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useMissions } from '../store/missions'
 import { computePayroll, payrollRows, DEFAULT_RATES } from '../lib/payroll'
-import { fmtHours, formatShiftsText } from '../lib/parseShift'
+import { payrollCutoffMonthKey } from '../lib/monthlyDetail'
+import { fmtHours, formatShiftsText, isRestDay } from '../lib/parseShift'
 import { exportPayrollPdf, exportPayrollXlsx } from '../lib/exportPayroll'
 import { todayLocal } from '../lib/date'
 
@@ -67,6 +68,21 @@ export default function PayrollSimulator() {
   const results = useMemo(() => computePayroll(shifts, hourlyRate, rates, { payMode, absenceDaysByMonth }),
     [shifts, hourlyRate, rates, payMode, absenceDaysByMonth])
   const current = results.find(r => r.key === monthKey) || results[results.length - 1]
+  // Relevé du 26 du mois précédent au 25 de ce mois-ci (la période de paie de current.key) pour
+  // copyHours() ci-dessous — demande explicite de l'utilisateur, à l'inverse de la décision prise au
+  // départ pour ce bouton (qui utilisait current.rows, le mois calendaire réel, en écartant
+  // volontairement la coupure du 25 comme "une nuance de paie sans rapport avec un simple relevé
+  // texte"). payrollCutoffMonthKey(date) === current.key sélectionne exactement cet intervalle : les
+  // jours 1-25 du mois de current.key, plus les jours 26-fin du mois précédent — sans réutiliser
+  // cutoffRows/carriedInRows (qui filtrent en plus sur la présence de majoration, une notion sans
+  // rapport avec "quelles dates appartiennent à cette période"), ce qui aurait par ex. écarté un
+  // 26-31 du mois précédent sans heures sup alors qu'il appartient bien à cette période de paie.
+  const cutoffPeriodShifts = useMemo(() => {
+    if (!current) return []
+    return shifts
+      .filter(s => !isRestDay(s) && payrollCutoffMonthKey(s.shift_date) === current.key)
+      .sort((a, b) => (a.shift_date < b.shift_date ? -1 : 1))
+  }, [shifts, current])
 
   function updateRate(v) {
     setRateDraft(v)
@@ -125,20 +141,23 @@ export default function PayrollSimulator() {
     setBusy(null)
   }
 
-  // Copie le relevé d'heures du mois affiché en texte brut (même format que celui accepté à
-  // l'import, "d/m : Hh - Hh" + " (off)" pour un jour OFF travaillé — voir formatShiftsText()) plutôt
-  // qu'un PDF/Excel, pour pouvoir le coller ailleurs (message, note...). `current.rows` : les shifts
-  // du mois calendaire réel tels qu'affichés dans le tableau "Détail des heures" des exports, hors
-  // report/coupure du 25 (une nuance de paie qui n'a pas sa place dans un simple relevé texte).
-  // `busy('copy')` rend ce bouton mutuellement exclusif avec les exports PDF/Excel (comme eux entre
-  // eux) ; `copyError` reste distinct de `error` (export) pour ne pas afficher "L'export a échoué"
-  // quand seule la copie presse-papiers a échoué — les deux erreurs sont sans rapport pour l'utilisateur
-  // (bug trouvé en review : les deux partageaient le même état avant ce correctif).
+  // Copie le relevé d'heures en texte brut (même format que celui accepté à l'import, "d/m : Hh -
+  // Hh" + " (off)" pour un jour OFF travaillé — voir formatShiftsText()) plutôt qu'un PDF/Excel, pour
+  // pouvoir le coller ailleurs (message, note...). `cutoffPeriodShifts` : la période de paie du 26 du
+  // mois précédent au 25 de ce mois-ci (voir sa définition plus haut) — demande explicite de
+  // l'utilisateur, à l'inverse de la décision prise au départ pour ce bouton (qui écartait la coupure
+  // du 25 comme "une nuance de paie sans rapport avec un simple relevé texte" ; l'utilisateur a
+  // depuis précisé vouloir justement cette période-là, probablement pour la transmettre telle quelle
+  // à son employeur/comptable qui raisonne lui aussi en périodes de paie). `busy('copy')` rend ce
+  // bouton mutuellement exclusif avec les exports PDF/Excel (comme eux entre eux) ; `copyError` reste
+  // distinct de `error` (export) pour ne pas afficher "L'export a échoué" quand seule la copie
+  // presse-papiers a échoué — les deux erreurs sont sans rapport pour l'utilisateur (bug trouvé en
+  // review : les deux partageaient le même état avant ce correctif).
   const copyHours = async () => {
     setBusy('copy')
     setCopyError(null)
     try {
-      await navigator.clipboard.writeText(formatShiftsText(current.rows))
+      await navigator.clipboard.writeText(formatShiftsText(cutoffPeriodShifts))
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch (e) {
@@ -236,7 +255,7 @@ export default function PayrollSimulator() {
             className="w-full bg-surface-2 text-[#E6E9EF] rounded-xl py-3 text-sm font-medium active:bg-white/10 mt-2 disabled:opacity-50">
             {busy === 'pdf-hours' ? '…' : 'PDF (heures)'}
           </button>
-          <button onClick={copyHours} disabled={busy || current.rows.length === 0}
+          <button onClick={copyHours} disabled={busy || cutoffPeriodShifts.length === 0}
             className="w-full bg-surface-2 text-[#E6E9EF] rounded-xl py-3 text-sm font-medium active:bg-white/10 mt-2 disabled:opacity-50">
             {busy === 'copy' ? '…' : copied ? 'Copié !' : 'Copier les heures (texte)'}
           </button>
